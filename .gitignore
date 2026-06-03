@@ -1,0 +1,14 @@
+# Virtual environment
+.venv/
+
+# Google service account credentials (keep secret!)
+service_account.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# OS
+.DS_Store
+Thumbs.db
