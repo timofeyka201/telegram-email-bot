@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler
 
 # === Config ===
 SPREADSHEET_ID = "1g5Jib2xa4HqRUiq5XjNqLbczaIu3mls0q0op4eQI6A0"
-WORKSHEET_NAME = "Zadacha 2"
+WORKSHEET_NAME = "Задача 2"
 EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 
 
