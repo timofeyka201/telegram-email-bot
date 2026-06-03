@@ -64,21 +64,21 @@ def handle_update(update: dict, token: str):
     text = msg["text"].strip()
 
     if text.startswith("/start"):
-        send_message(token, chat_id, "Hi! Send me an email and I will save it to the database.")
+        send_message(token, chat_id, "Привет! Пришли мне email — я сохраню его в базу.")
         return
 
     if not is_valid_email(text):
-        send_message(token, chat_id, "You sent an invalid email.")
+        send_message(token, chat_id, "Вы прислали некорректный email.")
         return
 
     ws = get_worksheet()
 
     if email_exists(ws, text):
-        send_message(token, chat_id, "This email is already registered.")
+        send_message(token, chat_id, "Данный email уже зарегистрирован.")
         return
 
     save_email(ws, text)
-    send_message(token, chat_id, f"Email {text} saved successfully!")
+    send_message(token, chat_id, f"Email {text} сохранён ✅")
 
 
 class handler(BaseHTTPRequestHandler):
