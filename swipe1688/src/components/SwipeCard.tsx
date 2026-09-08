@@ -6,7 +6,7 @@ import Img from "./Img";
 import { IconFlame, IconInfo, IconStar } from "./Icons";
 import type { Product } from "@/lib/types";
 import type { Decision } from "@/lib/store";
-import { compact, formatCny, formatRub, plural } from "@/lib/money";
+import { compact, formatNative, formatRub, plural } from "@/lib/money";
 
 const SWIPE_DISTANCE = 110;
 const SWIPE_VELOCITY = 520;
@@ -14,7 +14,7 @@ const SUPER_DISTANCE = 130;
 
 type Props = {
   product: Product;
-  rate: number;
+  rates: Record<string, number>;
   /** 0 — верхняя карточка, дальше — те, что в стопке под ней */
   depth: number;
   onDecide: (d: Decision) => void;
@@ -22,7 +22,7 @@ type Props = {
   onDrag?: (x: number, y: number) => void;
 };
 
-export default function SwipeCard({ product, rate, depth, onDecide, onOpen, onDrag }: Props) {
+export default function SwipeCard({ product, rates, depth, onDecide, onOpen, onDrag }: Props) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-260, 0, 260], [-15, 0, 15]);
@@ -150,10 +150,14 @@ export default function SwipeCard({ product, rate, depth, onDecide, onOpen, onDr
             <div className="min-w-0">
               <h2 className="line-clamp-2 text-[17px] font-semibold leading-snug">{product.title}</h2>
               <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <span className="text-[22px] font-bold leading-none">{formatRub(product.price, rate)}</span>
-                <span className="text-sm text-white/70">{formatCny(product.price)}</span>
+                <span className="text-[22px] font-bold leading-none">
+                  {formatRub(product.price, product.currency, rates)}
+                </span>
+                <span className="text-sm text-white/70">{formatNative(product.price, product.currency)}</span>
                 {product.priceMax !== undefined && (
-                  <span className="text-xs text-white/60">до {formatRub(product.priceMax, rate)}</span>
+                  <span className="text-xs text-white/60 line-through">
+                    {formatRub(product.priceMax, product.currency, rates)}
+                  </span>
                 )}
               </div>
               <p className="mt-1 truncate text-xs text-white/70">

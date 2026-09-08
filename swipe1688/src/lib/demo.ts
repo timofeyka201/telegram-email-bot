@@ -278,7 +278,8 @@ export const DEMO_PRODUCTS: Product[] = SEEDS.map((s) => ({
   reviewsCount: Math.round(s.sold / 14),
   soldCount: s.sold,
   reviews: reviews(s.id, s.revs),
-  source: "demo" as const,
+  currency: "CNY",
+  source: "demo",
 }));
 
 /** Бесконечная лента для демо-режима: повторяем подборку с новыми id. */

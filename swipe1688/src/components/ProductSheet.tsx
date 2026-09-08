@@ -7,7 +7,7 @@ import { IconCart, IconExternal, IconHeart, IconStar, IconX } from "./Icons";
 import { toast } from "./Toast";
 import { useStore } from "@/lib/store";
 import type { Product } from "@/lib/types";
-import { compact, formatCny, formatRub, plural, priceLabel } from "@/lib/money";
+import { compact, formatNative, formatRub, plural, priceRange } from "@/lib/money";
 
 type Tab = "desc" | "specs" | "reviews";
 
@@ -20,11 +20,12 @@ export default function ProductSheet({ product, onClose }: { product: Product | 
 }
 
 function Sheet({ product, onClose }: { product: Product; onClose: () => void }) {
-  const rate = useStore((s) => s.rate);
+  const rates = useStore((s) => s.rates);
   const cart = useStore((s) => s.cart);
   const liked = useStore((s) => s.liked);
   const addToCart = useStore((s) => s.addToCart);
   const unlike = useStore((s) => s.unlike);
+  const like = useStore((s) => s.like);
 
   const [full, setFull] = useState<Product>(product);
   const [enriching, setEnriching] = useState(false);
@@ -90,11 +91,13 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
 
         <section className="bg-[var(--color-surface)] px-4 pb-5 pt-4">
           <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-            <span className="text-[28px] font-bold leading-none">{formatRub(full.price, rate)}</span>
+            <span className="text-[28px] font-bold leading-none">{formatRub(full.price, full.currency, rates)}</span>
             {full.priceMax !== undefined && (
-              <span className="text-[15px] text-[var(--color-muted)]">до {formatRub(full.priceMax, rate)}</span>
+              <span className="text-[15px] text-[var(--color-muted)] line-through">
+                {formatRub(full.priceMax, full.currency, rates)}
+              </span>
             )}
-            <span className="text-[13px] text-[var(--color-muted)]">{priceLabel(full.price, full.priceMax)}</span>
+            <span className="text-[13px] text-[var(--color-muted)]">{priceRange(full.price, full.priceMax, full.currency)}</span>
           </div>
           <h1 className="mt-2 text-[17px] font-semibold leading-snug">{full.title}</h1>
 
@@ -127,8 +130,10 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
                     {t.to ? `${t.from}–${t.to} шт.` : `от ${t.from} шт.`}
                   </span>
                   <span className="font-semibold">
-                    {formatRub(t.price, rate)}
-                    <span className="ml-1.5 text-[12px] font-normal text-[var(--color-muted)]">{formatCny(t.price)}</span>
+                    {formatRub(t.price, full.currency, rates)}
+                    <span className="ml-1.5 text-[12px] font-normal text-[var(--color-muted)]">
+                      {formatNative(t.price, full.currency)}
+                    </span>
                   </span>
                 </div>
               ))}
@@ -146,7 +151,7 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
                   >
                     {sku.name}
                     {sku.price !== undefined && (
-                      <span className="ml-1.5 text-[var(--color-muted)]">{formatCny(sku.price)}</span>
+                      <span className="ml-1.5 text-[var(--color-muted)]">{formatNative(sku.price, full.currency)}</span>
                     )}
                   </span>
                 ))}
@@ -222,7 +227,7 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
           rel="noreferrer noopener"
           className="mt-2 flex items-center justify-between bg-[var(--color-surface)] px-4 py-4 text-[14px] font-medium"
         >
-          Открыть карточку на 1688
+          Открыть карточку у источника
           <IconExternal className="h-4.5 w-4.5 text-[var(--color-muted)]" />
         </a>
       </div>
@@ -235,7 +240,7 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
               unlike(full.id);
               toast("Убрали из избранного");
             } else {
-              useStore.setState((s) => ({ liked: [full, ...s.liked] }));
+              like(full);
               toast("Добавили в избранное", "like");
             }
           }}

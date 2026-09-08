@@ -8,14 +8,14 @@ import ProductSheet from "@/components/ProductSheet";
 import { IconCart, IconHeart, IconTrash } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { useHydrated, useStore } from "@/lib/store";
-import { formatCny, formatRub, plural } from "@/lib/money";
+import { formatNative, formatRub, plural } from "@/lib/money";
 import type { Product } from "@/lib/types";
 
 export default function LikesPage() {
   const hydrated = useHydrated();
   const liked = useStore((s) => s.liked);
   const cart = useStore((s) => s.cart);
-  const rate = useStore((s) => s.rate);
+  const rates = useStore((s) => s.rates);
   const unlike = useStore((s) => s.unlike);
   const addToCart = useStore((s) => s.addToCart);
   const [sheet, setSheet] = useState<Product | null>(null);
@@ -51,8 +51,8 @@ export default function LikesPage() {
                   <button type="button" onClick={() => setSheet(p)} className="block w-full text-left">
                     <Img src={p.images[0]} alt={p.title} className="aspect-square w-full" fallbackLabel={p.title.slice(0, 40)} />
                     <div className="px-2.5 pb-2 pt-2">
-                      <p className="text-[15px] font-bold leading-none">{formatRub(p.price, rate)}</p>
-                      <p className="mt-0.5 text-[11px] text-[var(--color-muted)]">{formatCny(p.price)}</p>
+                      <p className="text-[15px] font-bold leading-none">{formatRub(p.price, p.currency, rates)}</p>
+                      <p className="mt-0.5 text-[11px] text-[var(--color-muted)]">{formatNative(p.price, p.currency)}</p>
                       <p className="mt-1 line-clamp-2 min-h-[32px] text-[12px] leading-tight text-[var(--color-ink)]">
                         {p.title}
                       </p>

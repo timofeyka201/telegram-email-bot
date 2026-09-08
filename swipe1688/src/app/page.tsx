@@ -8,12 +8,15 @@ import ParsePanel from "@/components/ParsePanel";
 import ProductSheet from "@/components/ProductSheet";
 import SwipeCard from "@/components/SwipeCard";
 import TopBar from "@/components/TopBar";
-import { IconHeart, IconSearch, IconSpark, IconX } from "@/components/Icons";
+import { IconHeart, IconSearch, IconX } from "@/components/Icons";
 import { toast } from "@/components/Toast";
+import { loadNextPage } from "@/lib/feed";
 import { DAILY_GOAL, useHydrated, useStore, type Decision } from "@/lib/store";
-import type { ParseResult, Product } from "@/lib/types";
+import type { Product } from "@/lib/types";
 
 const VISIBLE = 3;
+/** За сколько карточек до конца просить следующую страницу. */
+const PREFETCH_AT = 8;
 
 function haptic(pattern: number | number[]) {
   if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate(pattern);
@@ -24,18 +27,19 @@ export default function DeckPage() {
   const deck = useStore((s) => s.deck);
   const index = useStore((s) => s.index);
   const stats = useStore((s) => s.stats);
-  const rate = useStore((s) => s.rate);
-  const lastQuery = useStore((s) => s.lastQuery);
+  const rates = useStore((s) => s.rates);
+  const cursor = useStore((s) => s.cursor);
+  const providerLabel = useStore((s) => s.providerLabel);
   const historyLen = useStore((s) => s.history.length);
   const decide = useStore((s) => s.decide);
   const undo = useStore((s) => s.undo);
-  const appendDeck = useStore((s) => s.appendDeck);
 
   const [exitDir, setExitDir] = useState<Decision>("like");
   const [sheet, setSheet] = useState<Product | null>(null);
   const [parseOpen, setParseOpen] = useState(false);
-  const [refilling, setRefilling] = useState(false);
-  const pageRef = useRef(1);
+  const [feedError, setFeedError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const loadingRef = useRef(false);
   const goalCelebrated = useRef(false);
 
   const visible = deck.slice(index, index + VISIBLE);
@@ -59,7 +63,7 @@ export default function DeckPage() {
     [decide],
   );
 
-  // Клавиатура: стрелки и пробел — чтобы на десктопе было так же быстро, как пальцем.
+  // Клавиатура: на десктопе свайпать так же быстро, как пальцем.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (sheet || parseOpen) return;
@@ -77,37 +81,28 @@ export default function DeckPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [onDecide, undo, sheet, parseOpen, deck, index]);
 
-  // Дозагрузка: лента не должна заканчиваться под пальцем.
+  /**
+   * Бесконечная лента: как только запас карточек проседает, тянем следующую
+   * страницу. Курсор хранится в сторе, поэтому докрутка переживает перезагрузку.
+   */
   useEffect(() => {
-    if (!hydrated || refilling || !deck.length || remaining > 4) return;
-    const isDemo = deck[deck.length - 1]?.source === "demo";
-    const isUrlQuery = /1688\.com|^\s*\d{6,}\s*$/m.test(lastQuery);
-
-    if (isDemo) {
-      import("@/lib/demo").then(({ demoDeck }) => {
-        const stamp = Date.now();
-        appendDeck(demoDeck(12).map((p) => ({ ...p, id: `${p.id}-r${stamp}` })));
-      });
-      return;
-    }
-    if (!lastQuery || isUrlQuery) return;
-
-    setRefilling(true);
-    pageRef.current += 1;
-    fetch("/api/parse", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: "search", query: lastQuery, page: pageRef.current }),
-    })
-      .then((r) => r.json())
-      .then((d: ParseResult & { error?: string }) => {
-        if (d.products?.length) appendDeck(d.products);
+    if (!hydrated || feedError) return;
+    if (remaining > PREFETCH_AT) return;
+    // Флаг «уже грузим» держим в ref, а не в state: иначе он попадает в
+    // зависимости эффекта и cleanup успевает погасить завершение запроса.
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    setLoading(true);
+    loadNextPage()
+      .then((res) => {
+        if (!res.ok) setFeedError(res.error ?? "Источник не ответил");
       })
-      .catch(() => undefined)
-      .finally(() => setRefilling(false));
-  }, [hydrated, remaining, deck, lastQuery, appendDeck, refilling]);
+      .finally(() => {
+        loadingRef.current = false;
+        setLoading(false);
+      });
+  }, [hydrated, remaining, feedError, cursor]);
 
-  // Достижение дневной цели — маленький повод вернуться завтра.
   useEffect(() => {
     if (stats.daySwipes >= DAILY_GOAL && !goalCelebrated.current) {
       goalCelebrated.current = true;
@@ -115,6 +110,11 @@ export default function DeckPage() {
       haptic([16, 60, 16]);
     }
   }, [stats.daySwipes]);
+
+  const retry = () => {
+    loadingRef.current = false;
+    setFeedError(null);
+  };
 
   if (!hydrated) {
     return (
@@ -124,17 +124,36 @@ export default function DeckPage() {
     );
   }
 
-  if (!deck.length) {
+  // Лента ещё ни разу не наполнилась и что-то сломалось — показываем подбор.
+  if (!deck.length && feedError) {
     return (
       <div className="flex-1">
+        <div className="mx-5 mt-5 rounded-2xl bg-[#fff1f0] px-4 py-3 text-[13px] leading-snug text-[#c2352a]">
+          {feedError}
+        </div>
         <ParsePanel />
+      </div>
+    );
+  }
+
+  if (!deck.length) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3">
+        <span className="h-7 w-7 animate-spin rounded-full border-[3px] border-[var(--color-line)] border-t-[var(--color-accent)]" />
+        <p className="text-[14px] text-[var(--color-muted)]">Собираем ленту…</p>
       </div>
     );
   }
 
   return (
     <div className="flex flex-1 flex-col">
-      <TopBar daySwipes={stats.daySwipes} streak={stats.streak} remaining={remaining} onOpenParse={() => setParseOpen(true)} />
+      <TopBar
+        daySwipes={stats.daySwipes}
+        streak={stats.streak}
+        remaining={remaining}
+        sourceLabel={providerLabel}
+        onOpenParse={() => setParseOpen(true)}
+      />
 
       <div className="relative flex-1 px-4 pb-2 pt-3">
         <div className="absolute inset-x-4 bottom-2 top-3">
@@ -146,7 +165,7 @@ export default function DeckPage() {
                 <SwipeCard
                   key={product.id}
                   product={product}
-                  rate={rate}
+                  rates={rates}
                   depth={i}
                   onDecide={onDecide}
                   onOpen={() => setSheet(product)}
@@ -154,7 +173,7 @@ export default function DeckPage() {
               ))}
           </AnimatePresence>
 
-          {remaining === 0 && <EndOfDeck onNew={() => setParseOpen(true)} likes={stats.likes} swipes={stats.swipes} />}
+          {remaining === 0 && <Interlude loading={loading} error={feedError} onRetry={retry} onNew={() => setParseOpen(true)} />}
         </div>
       </div>
 
@@ -168,7 +187,7 @@ export default function DeckPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/40"
+            className="fixed inset-0 z-50 overflow-y-auto bg-black/40"
             onClick={() => setParseOpen(false)}
           >
             <motion.div
@@ -190,7 +209,13 @@ export default function DeckPage() {
                   <IconX className="h-4.5 w-4.5" />
                 </button>
               </div>
-              <ParsePanel compact onDone={() => setParseOpen(false)} />
+              <ParsePanel
+                compact
+                onDone={() => {
+                  setFeedError(null);
+                  setParseOpen(false);
+                }}
+              />
             </motion.div>
           </motion.div>
         )}
@@ -199,33 +224,55 @@ export default function DeckPage() {
   );
 }
 
-function EndOfDeck({ onNew, likes, swipes }: { onNew: () => void; likes: number; swipes: number }) {
+/** Пауза между страницами ленты: либо ждём загрузку, либо объясняем сбой. */
+function Interlude({
+  loading,
+  error,
+  onRetry,
+  onNew,
+}: {
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+  onNew: () => void;
+}) {
   return (
-    <div className="card-shadow pop absolute inset-0 flex flex-col items-center justify-center gap-4 rounded-[var(--radius-card)] bg-[var(--color-surface)] px-8 text-center">
-      <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#fff2e8]">
-        <IconSpark className="h-8 w-8 text-[var(--color-accent)]" />
-      </span>
-      <div>
-        <h2 className="text-[19px] font-bold">Карточки закончились</h2>
-        <p className="mt-1.5 text-[14px] leading-snug text-[var(--color-muted)]">
-          Просмотрено {swipes} · понравилось {likes}. Запустите новый парсинг — лента соберётся заново.
-        </p>
-      </div>
-      <div className="flex w-full flex-col gap-2">
-        <button
-          type="button"
-          onClick={onNew}
-          className="flex items-center justify-center gap-2 rounded-2xl bg-[var(--color-accent)] py-3.5 text-[15px] font-semibold text-white"
-        >
-          <IconSearch className="h-5 w-5" /> Новый поиск
-        </button>
-        <Link
-          href="/likes"
-          className="flex items-center justify-center gap-2 rounded-2xl bg-[var(--color-surface-2)] py-3.5 text-[15px] font-semibold"
-        >
-          <IconHeart className="h-5 w-5 text-[var(--color-like)]" /> Смотреть избранное
-        </Link>
-      </div>
+    <div className="card-shadow absolute inset-0 flex flex-col items-center justify-center gap-4 rounded-[var(--radius-card)] bg-[var(--color-surface)] px-8 text-center">
+      {loading || !error ? (
+        <>
+          <span className="h-8 w-8 animate-spin rounded-full border-[3px] border-[var(--color-line)] border-t-[var(--color-accent)]" />
+          <p className="text-[14px] text-[var(--color-muted)]">Подгружаем следующие карточки…</p>
+        </>
+      ) : (
+        <>
+          <div>
+            <h2 className="text-[19px] font-bold">Лента прервалась</h2>
+            <p className="mt-1.5 text-[14px] leading-snug text-[var(--color-muted)]">{error}</p>
+          </div>
+          <div className="flex w-full flex-col gap-2">
+            <button
+              type="button"
+              onClick={onRetry}
+              className="rounded-2xl bg-[var(--color-accent)] py-3.5 text-[15px] font-semibold text-white"
+            >
+              Попробовать снова
+            </button>
+            <button
+              type="button"
+              onClick={onNew}
+              className="flex items-center justify-center gap-2 rounded-2xl bg-[var(--color-surface-2)] py-3.5 text-[15px] font-semibold"
+            >
+              <IconSearch className="h-5 w-5" /> Сменить источник
+            </button>
+            <Link
+              href="/likes"
+              className="flex items-center justify-center gap-2 rounded-2xl bg-[var(--color-surface-2)] py-3.5 text-[15px] font-semibold"
+            >
+              <IconHeart className="h-5 w-5 text-[var(--color-like)]" /> Смотреть избранное
+            </Link>
+          </div>
+        </>
+      )}
     </div>
   );
 }

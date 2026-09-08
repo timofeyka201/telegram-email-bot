@@ -3,7 +3,7 @@ export type PriceTier = {
   from: number;
   /** максимальное количество (не задано = «и больше») */
   to?: number;
-  /** цена за штуку в юанях */
+  /** цена за штуку в валюте товара */
   price: number;
 };
 
@@ -40,7 +40,7 @@ export type Product = {
   url: string;
   title: string;
   images: string[];
-  /** цена за штуку в юанях (минимальная из диапазона) */
+  /** цена за штуку в валюте товара (минимальная из диапазона) */
   price?: number;
   priceMax?: number;
   tiers: PriceTier[];
@@ -53,15 +53,31 @@ export type Product = {
   reviewsCount?: number;
   soldCount?: number;
   reviews: Review[];
-  /** источник данных: реальный парсер или встроенная демо-подборка */
-  source: "api" | "demo";
+  /** ISO-код валюты цены: CNY у 1688, USD у открытого каталога */
+  currency: string;
+  /** id провайдера, откуда пришла карточка */
+  source: string;
 };
 
 export type ParseResult = {
   products: Product[];
   /** сообщения о том, что пошло не так по отдельным ссылкам */
   errors: { input: string; message: string }[];
-  source: "api" | "demo";
+  source: string;
   /** какой поисковый эндпоинт сработал (для отладки) */
   endpoint?: string;
+};
+
+/**
+ * Страница бесконечной ленты. Курсор непрозрачен для клиента и никогда не
+ * бывает null: конечный каталог провайдер закольцовывает с новой перетасовкой,
+ * поэтому карточки в ленте не заканчиваются.
+ */
+export type FeedPage = {
+  products: Product[];
+  cursor: string;
+  provider: string;
+  providerLabel: string;
+  /** каталог пошёл на второй круг — показываем это честно */
+  looped: boolean;
 };

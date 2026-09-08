@@ -7,6 +7,7 @@ type Props = {
   daySwipes: number;
   streak: number;
   remaining: number;
+  sourceLabel: string;
   onOpenParse: () => void;
 };
 
@@ -39,7 +40,7 @@ function GoalRing({ value }: { value: number }) {
   );
 }
 
-export default function TopBar({ daySwipes, streak, remaining, onOpenParse }: Props) {
+export default function TopBar({ daySwipes, streak, remaining, sourceLabel, onOpenParse }: Props) {
   return (
     <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-[var(--color-line)] bg-[var(--color-surface)]/95 px-4 py-2.5 backdrop-blur">
       <GoalRing value={daySwipes} />
@@ -50,8 +51,8 @@ export default function TopBar({ daySwipes, streak, remaining, onOpenParse }: Pr
         </span>
       )}
       <div className="ml-auto flex items-center gap-2">
-        <span className="text-xs font-medium text-[var(--color-muted)]">
-          {remaining > 0 ? `Ещё ${remaining}` : "Лента пуста"}
+        <span className="max-w-[9.5rem] truncate text-xs font-medium text-[var(--color-muted)]">
+          {sourceLabel || (remaining > 0 ? `Ещё ${remaining}` : "Лента")}
         </span>
         <button
           type="button"

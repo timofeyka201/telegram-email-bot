@@ -340,7 +340,7 @@ function extractSeller(nodes: Visit[]): Seller | undefined {
 
 // ------------------------------------------------------------------ сборка
 
-export function normalizeProduct(raw: Json, fallbackUrl = ""): Product | null {
+export function normalizeProduct(raw: Json, fallbackUrl = "", source = "bhapi", currency = "CNY"): Product | null {
   const root = unwrapEnvelope(raw);
   const nodes = bfs(root);
   if (!nodes.length) return null;
@@ -380,12 +380,13 @@ export function normalizeProduct(raw: Json, fallbackUrl = ""): Product | null {
     reviewsCount: toNum(findFirst(nodes, /^(reviews?_?count|comment_?count|rate_?count|feedback_?count|total_?reviews)$/i, (v): v is string | number => typeof v === "string" || typeof v === "number")),
     soldCount: toNum(findFirst(nodes, /^(sold|sales?|sold_?count|sale_?count|trade_?count|sold_?out)$/i, (v): v is string | number => typeof v === "string" || typeof v === "number")),
     reviews: extractReviews(nodes),
-    source: "api",
+    currency,
+    source,
   };
 }
 
 /** Ответ поиска: массив товаров может лежать где угодно — ищем самый «товарный». */
-export function normalizeList(raw: Json): Product[] {
+export function normalizeList(raw: Json, source = "bhapi", currency = "CNY"): Product[] {
   const root = unwrapEnvelope(raw);
   const nodes = bfs(root, 5);
   const candidates = [
@@ -397,7 +398,7 @@ export function normalizeList(raw: Json): Product[] {
   for (const arr of candidates) {
     const mapped = arr
       .slice(0, 60)
-      .map((it) => normalizeProduct(it))
+      .map((it) => normalizeProduct(it, "", source, currency))
       .filter((p): p is Product => p !== null);
     if (mapped.length > best.length) best = mapped;
   }

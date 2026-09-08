@@ -14,7 +14,17 @@ const ALLOWED = [
   /(^|\.)aliyuncs\.com$/i,
   /(^|\.)picsum\.photos$/i,
   /(^|\.)unsplash\.com$/i,
+  /(^|\.)dummyjson\.com$/i,
 ];
+
+/**
+ * Дополнительные хосты для локальных зеркал и локальных стендов.
+ * Пусто по умолчанию: расширять список — осознанное действие.
+ */
+const EXTRA = (process.env.IMG_EXTRA_HOSTS || "")
+  .split(",")
+  .map((h) => h.trim().toLowerCase())
+  .filter(Boolean);
 
 const MAX_BYTES = 8 * 1024 * 1024;
 
@@ -29,7 +39,10 @@ export async function GET(req: NextRequest) {
     return new NextResponse("bad url", { status: 400 });
   }
   if (target.protocol !== "https:" && target.protocol !== "http:") return new NextResponse("bad scheme", { status: 400 });
-  if (!ALLOWED.some((re) => re.test(target.hostname))) return new NextResponse("host not allowed", { status: 403 });
+  const host = target.hostname.toLowerCase();
+  if (!ALLOWED.some((re) => re.test(host)) && !EXTRA.includes(host)) {
+    return new NextResponse("host not allowed", { status: 403 });
+  }
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 15_000);

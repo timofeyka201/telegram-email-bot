@@ -7,32 +7,37 @@ import Img from "@/components/Img";
 import ProductSheet from "@/components/ProductSheet";
 import { IconCart, IconExternal, IconTrash } from "@/components/Icons";
 import { toast } from "@/components/Toast";
-import { cartTotalCny, unitPrice, useHydrated, useStore } from "@/lib/store";
-import { formatCny, formatRub, plural } from "@/lib/money";
+import { cartTotals, unitPrice, useHydrated, useStore } from "@/lib/store";
+import { formatNative, formatRub, plural, symbolOf, toRub } from "@/lib/money";
 import type { Product } from "@/lib/types";
 
 export default function CartPage() {
   const hydrated = useHydrated();
   const cart = useStore((s) => s.cart);
-  const rate = useStore((s) => s.rate);
+  const rates = useStore((s) => s.rates);
   const setRate = useStore((s) => s.setRate);
   const setQty = useStore((s) => s.setQty);
   const removeFromCart = useStore((s) => s.removeFromCart);
   const clearCart = useStore((s) => s.clearCart);
   const [sheet, setSheet] = useState<Product | null>(null);
-  const [rateOpen, setRateOpen] = useState(false);
+  const [ratesOpen, setRatesOpen] = useState(false);
 
   if (!hydrated) return <div className="flex-1" />;
 
-  const totalCny = cartTotalCny(cart);
+  const totals = cartTotals(cart);
+  const currencies = Object.keys(totals);
+  const totalRub = currencies.reduce((sum, c) => sum + (toRub(totals[c], c, rates) ?? 0), 0);
   const totalQty = cart.reduce((s, c) => s + c.qty, 0);
 
   async function copyList() {
     const text = cart
-      .map((c) => `${c.qty} × ${c.product.title}\n${formatCny(unitPrice(c))} / шт · ${c.product.url}`)
+      .map((c) => `${c.qty} × ${c.product.title}\n${formatNative(unitPrice(c), c.product.currency)} / шт · ${c.product.url}`)
       .join("\n\n");
+    const tail = currencies.map((c) => formatNative(totals[c], c)).join(" + ");
     try {
-      await navigator.clipboard.writeText(`${text}\n\nИтого: ${formatCny(totalCny)} (${formatRub(totalCny, rate)})`);
+      await navigator.clipboard.writeText(
+        `${text}\n\nИтого: ${tail} ≈ ${Math.round(totalRub).toLocaleString("ru-RU")} ₽`,
+      );
       toast("Список скопирован", "like");
     } catch {
       toast("Браузер не дал доступ к буферу", "warn");
@@ -67,24 +72,20 @@ export default function CartPage() {
                   className="soft-shadow flex gap-3 rounded-2xl bg-[var(--color-surface)] p-2.5"
                 >
                   <button type="button" onClick={() => setSheet(item.product)} className="shrink-0">
-                    <Img
-                      src={item.product.images[0]}
-                      alt={item.product.title}
-                      className="h-20 w-20 rounded-xl"
-                      fallbackLabel=""
-                    />
+                    <Img src={item.product.images[0]} alt={item.product.title} className="h-20 w-20 rounded-xl" fallbackLabel="" />
                   </button>
                   <div className="flex min-w-0 flex-1 flex-col">
                     <button type="button" onClick={() => setSheet(item.product)} className="text-left">
                       <p className="line-clamp-2 text-[13px] leading-tight">{item.product.title}</p>
                     </button>
                     <p className="mt-1 text-[12px] text-[var(--color-muted)]">
-                      {formatRub(unitPrice(item), rate)} / шт · {formatCny(unitPrice(item))}
+                      {formatRub(unitPrice(item), item.product.currency, rates)} / шт ·{" "}
+                      {formatNative(unitPrice(item), item.product.currency)}
                     </p>
                     <div className="mt-auto flex items-center gap-2 pt-1.5">
                       <Stepper qty={item.qty} onChange={(q) => setQty(item.product.id, q)} />
                       <span className="ml-auto text-[15px] font-bold">
-                        {formatRub(unitPrice(item) * item.qty, rate)}
+                        {formatRub(unitPrice(item) * item.qty, item.product.currency, rates)}
                       </span>
                       <button
                         type="button"
@@ -102,37 +103,49 @@ export default function CartPage() {
 
             <button
               type="button"
-              onClick={() => setRateOpen((v) => !v)}
-              className="w-full rounded-2xl bg-[var(--color-surface)] px-4 py-3 text-left text-[13px] soft-shadow"
+              onClick={() => setRatesOpen((v) => !v)}
+              className="soft-shadow w-full rounded-2xl bg-[var(--color-surface)] px-4 py-3 text-left text-[13px]"
             >
               <span className="text-[var(--color-muted)]">Курс пересчёта: </span>
-              <span className="font-semibold">1 ¥ = {rate} ₽</span>
+              <span className="font-semibold">
+                {currencies.map((c) => `1 ${symbolOf(c)} = ${rates[c] ?? "?"} ₽`).join(" · ")}
+              </span>
             </button>
-            {rateOpen && (
-              <div className="rounded-2xl bg-[var(--color-surface)] px-4 py-3 soft-shadow">
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0.1"
-                  value={rate}
-                  onChange={(e) => setRate(Number(e.target.value))}
-                  className="w-full rounded-xl bg-[var(--color-surface-2)] px-3 py-2 text-[15px] outline-none"
-                />
-                <p className="mt-1.5 text-[12px] text-[var(--color-muted)]">
-                  Цены на 1688 указаны в юанях. Курс задаётся вручную — доставка и комиссии сюда не входят.
+            {ratesOpen && (
+              <div className="soft-shadow space-y-2 rounded-2xl bg-[var(--color-surface)] px-4 py-3">
+                {currencies.map((c) => (
+                  <label key={c} className="flex items-center gap-3">
+                    <span className="w-16 text-[13px] text-[var(--color-muted)]">1 {symbolOf(c)} =</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      value={rates[c] ?? 1}
+                      onChange={(e) => setRate(c, Number(e.target.value))}
+                      className="flex-1 rounded-xl bg-[var(--color-surface-2)] px-3 py-2 text-[15px] outline-none"
+                    />
+                    <span className="text-[13px] text-[var(--color-muted)]">₽</span>
+                  </label>
+                ))}
+                <p className="text-[12px] leading-snug text-[var(--color-muted)]">
+                  Курсы задаются вручную. Доставка и комиссии в расчёт не входят.
                 </p>
               </div>
             )}
           </div>
 
           <div className="fixed inset-x-0 bottom-[57px] z-30 mx-auto max-w-[480px] border-t border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3">
-            <div className="flex items-baseline justify-between">
+            <div className="flex items-baseline justify-between gap-3">
               <span className="text-[13px] text-[var(--color-muted)]">
                 {totalQty} {plural(totalQty, "штука", "штуки", "штук")}
               </span>
               <div className="text-right">
-                <p className="text-[20px] font-bold leading-none">{formatRub(totalCny, rate)}</p>
-                <p className="text-[12px] text-[var(--color-muted)]">{formatCny(totalCny)}</p>
+                <p className="text-[20px] font-bold leading-none">
+                  {Math.round(totalRub).toLocaleString("ru-RU")} ₽
+                </p>
+                <p className="text-[12px] text-[var(--color-muted)]">
+                  {currencies.map((c) => formatNative(totals[c], c)).join(" + ")}
+                </p>
               </div>
             </div>
             <div className="mt-2.5 flex gap-2">
@@ -149,7 +162,7 @@ export default function CartPage() {
                 rel="noreferrer noopener"
                 className="flex items-center justify-center gap-1.5 rounded-2xl bg-[var(--color-surface-2)] px-4 py-3 text-[14px] font-semibold"
               >
-                На 1688 <IconExternal className="h-4 w-4" />
+                К товару <IconExternal className="h-4 w-4" />
               </a>
             </div>
           </div>
