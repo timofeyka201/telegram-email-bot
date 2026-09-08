@@ -4,6 +4,7 @@ import { fetchCard } from "@/lib/providers/wildberries";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 /**
  * Догрузка карточки. В выдаче поиска описания и характеристик обычно нет:

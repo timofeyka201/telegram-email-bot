@@ -15,7 +15,7 @@ import { decodeCursor, encodeCursor, type PageArgs, type Provider, type Provider
 const SEARCH_BASE = (process.env.WB_SEARCH_BASE || "https://search.wb.ru").replace(/\/+$/, "");
 const BASKET_BASE = process.env.WB_BASKET_BASE || ""; // пусто — обычные basket-NN.wbbasket.ru
 const PAGE_LIMIT = 60; // дальше выдача обычно пустеет
-const TIMEOUT = 15_000;
+const TIMEOUT = 9_000; // под лимит serverless-функции
 
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36";
@@ -58,7 +58,7 @@ function imagePath(host: string, id: number, index: number): string {
 
 async function head(url: string): Promise<boolean> {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 6000);
+  const timer = setTimeout(() => ctrl.abort(), 4000);
   try {
     const res = await fetch(url, { method: "HEAD", signal: ctrl.signal, headers: { "User-Agent": UA } });
     return res.ok;
@@ -251,7 +251,7 @@ export async function fetchCard(id: number): Promise<{ description?: string; att
   const url = `${host}/vol${vol}/part${part}/${id}/info/ru/card.json`;
 
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 10_000);
+  const timer = setTimeout(() => ctrl.abort(), 8_000);
   try {
     const res = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": UA } });
     if (!res.ok) return { attributes: [] };

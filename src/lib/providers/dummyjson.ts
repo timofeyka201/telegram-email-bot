@@ -11,7 +11,7 @@ import { decodeCursor, encodeCursor, shuffle, type PageArgs, type Provider, type
 // Базу можно подменить (тесты, зеркало, свой прокси) — код от этого не зависит.
 const BASE = (process.env.CATALOG_BASE || "https://dummyjson.com").replace(/\/+$/, "");
 const PAGE = 12;
-const TIMEOUT = 15_000;
+const TIMEOUT = 9_000; // под лимит serverless-функции
 
 type DjReview = { rating?: number; comment?: string; date?: string; reviewerName?: string };
 type DjProduct = {

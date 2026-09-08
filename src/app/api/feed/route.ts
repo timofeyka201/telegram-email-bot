@@ -4,6 +4,10 @@ import type { FeedPage } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
+
+/** Бюджет на перебор источников: функция должна успеть ответить до лимита. */
+const BUDGET_MS = 20_000;
 
 type Body = { provider?: string; query?: string; cursor?: string | null; seed?: number };
 
@@ -27,8 +31,13 @@ export async function POST(req: NextRequest) {
   // Порядок попыток: запрошенный источник, затем остальные готовые.
   const chain = [requested, ...PROVIDERS.filter((p) => p.id !== requested.id && p.ready())];
   const problems: string[] = [];
+  const startedAt = Date.now();
 
   for (const provider of chain) {
+    if (Date.now() - startedAt > BUDGET_MS) {
+      problems.push("остальные источники не успели ответить");
+      break;
+    }
     if (!provider.ready()) {
       problems.push(`${provider.label}: не настроен`);
       continue;

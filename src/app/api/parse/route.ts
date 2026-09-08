@@ -5,6 +5,7 @@ import type { ParseResult, Product } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 type Body = { mode?: "search" | "urls" | "demo"; query?: string; page?: number };
 
