@@ -1,3 +1,4 @@
+import { resolveWbHost, volPart, WB_REFERER, WB_UA } from "../wb-basket";
 import type { Attribute, Product } from "../types";
 import { decodeCursor, encodeCursor, type PageArgs, type Provider, type ProviderPage } from "./types";
 
@@ -17,8 +18,7 @@ const BASKET_BASE = process.env.WB_BASKET_BASE || ""; // пусто — обыч
 const PAGE_LIMIT = 60; // дальше выдача обычно пустеет
 const TIMEOUT = 9_000; // под лимит serverless-функции
 
-const UA =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36";
+const UA = WB_UA;
 
 /** Категории для ленты без запроса: перебираем их по кругу — так карточек тысячи. */
 const TOPICS = [
@@ -29,70 +29,6 @@ const TOPICS = [
   "духи", "крем для лица", "шампунь", "маска для лица", "витамины", "гантели", "коврик для йоги",
   "палатка", "термос", "конструктор", "настольная игра", "кофе в зёрнах",
 ];
-
-// ---------------------------------------------------------------- корзины фото
-
-/** Первое предположение по диапазону vol — дальше проверяем запросом. */
-function guessBasket(vol: number): number {
-  const table: [number, number][] = [
-    [143, 1], [287, 2], [431, 3], [719, 4], [1007, 5], [1061, 6], [1115, 7], [1169, 8],
-    [1313, 9], [1601, 10], [1655, 11], [1919, 12], [2045, 13], [2189, 14], [2405, 15],
-    [2621, 16], [2837, 17], [3053, 18], [3269, 19], [3485, 20], [3701, 21], [3917, 22],
-    [4133, 23], [4349, 24], [4565, 25],
-  ];
-  for (const [max, n] of table) if (vol <= max) return n;
-  return 26;
-}
-
-const basketCache = new Map<number, string>();
-
-function basketHost(n: number): string {
-  return BASKET_BASE || `https://basket-${String(n).padStart(2, "0")}.wbbasket.ru`;
-}
-
-function imagePath(host: string, id: number, index: number): string {
-  const vol = Math.floor(id / 100000);
-  const part = Math.floor(id / 1000);
-  return `${host}/vol${vol}/part${part}/${id}/images/big/${index}.webp`;
-}
-
-async function head(url: string): Promise<boolean> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 4000);
-  try {
-    const res = await fetch(url, { method: "HEAD", signal: ctrl.signal, headers: { "User-Agent": UA } });
-    return res.ok;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/**
- * Находит рабочую корзину для диапазона vol и запоминает её: одна проверка
- * на диапазон, дальше ссылки собираются без сетевых запросов.
- */
-async function resolveHost(id: number): Promise<string> {
-  const vol = Math.floor(id / 100000);
-  const cached = basketCache.get(vol);
-  if (cached) return cached;
-
-  const first = guessBasket(vol);
-  // Порядок проверки: предположение, потом соседи — диапазоны сдвигаются со временем.
-  const order = [first, first + 1, first - 1, first + 2, first - 2].filter((n) => n >= 1 && n <= 40);
-  for (const n of order) {
-    const host = basketHost(n);
-    if (await head(imagePath(host, id, 1))) {
-      basketCache.set(vol, host);
-      return host;
-    }
-    if (BASKET_BASE) break; // на стенде одна база, перебирать нечего
-  }
-  const fallback = basketHost(first);
-  basketCache.set(vol, fallback);
-  return fallback;
-}
 
 // ---------------------------------------------------------------- разбор ответа
 
@@ -141,12 +77,13 @@ function attributes(it: WbItem): Attribute[] {
     .map(([name, value]) => ({ name, value }));
 }
 
-async function toProduct(it: WbItem): Promise<Product | null> {
+function toProduct(it: WbItem): Product | null {
   if (!it || typeof it.id !== "number" || !it.name) return null;
   const { price, priceMax } = pickPrices(it);
-  const host = await resolveHost(it.id);
   const count = Math.min(Math.max(it.pics ?? 1, 1), 8);
-  const images = Array.from({ length: count }, (_, i) => imagePath(host, it.id!, i + 1));
+  // Ссылку на CDN не угадываем заранее: прокси подберёт корзину в момент
+  // запроса картинки и запомнит её — так карточка не остаётся с битым фото.
+  const images = Array.from({ length: count }, (_, i) => `/api/img?wb=${it.id}&n=${i + 1}`);
 
   const rating = it.reviewRating ?? it.rating;
   return {
@@ -224,7 +161,7 @@ export const wbProvider: Provider = {
       if (!items.length) return { products: [], cursor: encodeCursor(1, topic + 1), looped: true };
     }
 
-    const mapped = (await Promise.all(items.map(toProduct))).filter((p): p is Product => p !== null);
+    const mapped = items.map(toProduct).filter((p): p is Product => p !== null);
     // Ленту не перетасовываем: у Wildberries порядок «по популярности» осмысленный,
     // а seed нужен лишь чтобы разные сессии стартовали с разных тем.
     const products =
@@ -245,15 +182,18 @@ export function startCursorFor(seed: number): string {
  * Дотягиваем их, когда пользователь открывает карточку товара.
  */
 export async function fetchCard(id: number): Promise<{ description?: string; attributes: Attribute[] }> {
-  const host = await resolveHost(id);
-  const vol = Math.floor(id / 100000);
-  const part = Math.floor(id / 1000);
+  const host = await resolveWbHost(id);
+  if (!host) return { attributes: [] };
+  const { vol, part } = volPart(id);
   const url = `${host}/vol${vol}/part${part}/${id}/info/ru/card.json`;
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8_000);
   try {
-    const res = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": UA } });
+    const res = await fetch(url, {
+      signal: ctrl.signal,
+      headers: { "User-Agent": UA, Referer: WB_REFERER },
+    });
     if (!res.ok) return { attributes: [] };
     const json = (await res.json()) as {
       description?: string;

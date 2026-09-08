@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { resolveWbImage, WB_REFERER, WB_UA } from "@/lib/wb-basket";
 
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 /**
- * Картинки 1688 лежат на alicdn и отдаются только со «своим» Referer, поэтому
- * фронт грузит их через этот прокси. Список хостов закрытый — это и защита от SSRF.
+ * Прокси картинок. Нужен по двум причинам: CDN маркетплейсов отдают файлы
+ * только со «своим» Referer, а у Wildberries ссылку ещё и нужно подобрать.
+ * Список хостов закрытый — это заодно защита от SSRF.
  */
 const ALLOWED = [
   /(^|\.)alicdn\.com$/i,
@@ -19,10 +22,7 @@ const ALLOWED = [
   /(^|\.)wb\.ru$/i,
 ];
 
-/**
- * Дополнительные хосты для локальных зеркал и локальных стендов.
- * Пусто по умолчанию: расширять список — осознанное действие.
- */
+/** Дополнительные хосты для зеркал и локальных стендов. Пусто по умолчанию. */
 const EXTRA = (process.env.IMG_EXTRA_HOSTS || "")
   .split(",")
   .map((h) => h.trim().toLowerCase())
@@ -30,8 +30,35 @@ const EXTRA = (process.env.IMG_EXTRA_HOSTS || "")
 
 const MAX_BYTES = 8 * 1024 * 1024;
 
+/** Каждому источнику — его собственный Referer, иначе CDN отвечает отказом. */
+function headersFor(host: string): Record<string, string> {
+  const wb = /wbbasket\.ru$|wb\.ru$/i.test(host);
+  return {
+    Referer: wb ? WB_REFERER : "https://detail.1688.com/",
+    "User-Agent": WB_UA,
+    Accept: "image/avif,image/webp,image/*,*/*;q=0.8",
+  };
+}
+
+function allowed(host: string): boolean {
+  return ALLOWED.some((re) => re.test(host)) || EXTRA.includes(host);
+}
+
 export async function GET(req: NextRequest) {
-  const raw = req.nextUrl.searchParams.get("u");
+  const sp = req.nextUrl.searchParams;
+
+  // Wildberries: конкретную ссылку подбирает резолвер, а не клиент.
+  const wbId = sp.get("wb");
+  if (wbId) {
+    const id = Number(wbId);
+    const index = Math.max(1, Math.min(20, Number(sp.get("n") || 1)));
+    if (!Number.isFinite(id) || id <= 0) return new NextResponse("bad wb id", { status: 400 });
+    const resolved = await resolveWbImage(id, index);
+    if (!resolved) return new NextResponse("image not found", { status: 404 });
+    return stream(resolved);
+  }
+
+  const raw = sp.get("u");
   if (!raw) return new NextResponse("missing u", { status: 400 });
 
   let target: URL;
@@ -40,24 +67,24 @@ export async function GET(req: NextRequest) {
   } catch {
     return new NextResponse("bad url", { status: 400 });
   }
-  if (target.protocol !== "https:" && target.protocol !== "http:") return new NextResponse("bad scheme", { status: 400 });
-  const host = target.hostname.toLowerCase();
-  if (!ALLOWED.some((re) => re.test(host)) && !EXTRA.includes(host)) {
+  if (target.protocol !== "https:" && target.protocol !== "http:") {
+    return new NextResponse("bad scheme", { status: 400 });
+  }
+  if (!allowed(target.hostname.toLowerCase())) {
     return new NextResponse("host not allowed", { status: 403 });
   }
+  return stream(target.toString());
+}
 
+async function stream(url: string): Promise<NextResponse> {
+  const host = new URL(url).hostname.toLowerCase();
+  // Проверяем хост и здесь: резолвер настраивается переменными окружения,
+  // и подобранная ссылка не должна обходить общий список разрешённых.
+  if (!allowed(host)) return new NextResponse("host not allowed", { status: 403 });
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 15_000);
   try {
-    const upstream = await fetch(target, {
-      signal: ctrl.signal,
-      headers: {
-        Referer: "https://detail.1688.com/",
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36",
-        Accept: "image/avif,image/webp,image/*,*/*;q=0.8",
-      },
-    });
+    const upstream = await fetch(url, { signal: ctrl.signal, headers: headersFor(host) });
     if (!upstream.ok || !upstream.body) return new NextResponse("upstream error", { status: 502 });
 
     const type = upstream.headers.get("content-type") || "image/jpeg";
