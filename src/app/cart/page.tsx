@@ -8,7 +8,7 @@ import ProductSheet from "@/components/ProductSheet";
 import { IconCart, IconExternal, IconTrash } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { cartTotals, unitPrice, useHydrated, useStore } from "@/lib/store";
-import { formatNative, formatRub, plural, symbolOf, toRub } from "@/lib/money";
+import { formatNative, formatRub, needsConversion, plural, symbolOf, toRub } from "@/lib/money";
 import type { Product } from "@/lib/types";
 
 export default function CartPage() {
@@ -28,6 +28,7 @@ export default function CartPage() {
   const currencies = Object.keys(totals);
   const totalRub = currencies.reduce((sum, c) => sum + (toRub(totals[c], c, rates) ?? 0), 0);
   const totalQty = cart.reduce((s, c) => s + c.qty, 0);
+  const convertible = currencies.filter(needsConversion);
 
   async function copyList() {
     const text = cart
@@ -79,8 +80,10 @@ export default function CartPage() {
                       <p className="line-clamp-2 text-[13px] leading-tight">{item.product.title}</p>
                     </button>
                     <p className="mt-1 text-[12px] text-[var(--color-muted)]">
-                      {formatRub(unitPrice(item), item.product.currency, rates)} / шт ·{" "}
-                      {formatNative(unitPrice(item), item.product.currency)}
+                      {formatRub(unitPrice(item), item.product.currency, rates)} / шт
+                      {needsConversion(item.product.currency)
+                        ? ` · ${formatNative(unitPrice(item), item.product.currency)}`
+                        : ""}
                     </p>
                     <div className="mt-auto flex items-center gap-2 pt-1.5">
                       <Stepper qty={item.qty} onChange={(q) => setQty(item.product.id, q)} />
@@ -101,6 +104,7 @@ export default function CartPage() {
               ))}
             </AnimatePresence>
 
+            {convertible.length > 0 && (
             <button
               type="button"
               onClick={() => setRatesOpen((v) => !v)}
@@ -108,12 +112,15 @@ export default function CartPage() {
             >
               <span className="text-[var(--color-muted)]">Курс пересчёта: </span>
               <span className="font-semibold">
-                {currencies.map((c) => `1 ${symbolOf(c)} = ${rates[c] ?? "?"} ₽`).join(" · ")}
+                {convertible.length
+                  ? convertible.map((c) => `1 ${symbolOf(c)} = ${rates[c] ?? "?"} ₽`).join(" · ")
+                  : "все цены уже в рублях"}
               </span>
             </button>
-            {ratesOpen && (
+            )}
+            {ratesOpen && convertible.length > 0 && (
               <div className="soft-shadow space-y-2 rounded-2xl bg-[var(--color-surface)] px-4 py-3">
-                {currencies.map((c) => (
+                {convertible.map((c) => (
                   <label key={c} className="flex items-center gap-3">
                     <span className="w-16 text-[13px] text-[var(--color-muted)]">1 {symbolOf(c)} =</span>
                     <input
@@ -143,9 +150,11 @@ export default function CartPage() {
                 <p className="text-[20px] font-bold leading-none">
                   {Math.round(totalRub).toLocaleString("ru-RU")} ₽
                 </p>
-                <p className="text-[12px] text-[var(--color-muted)]">
-                  {currencies.map((c) => formatNative(totals[c], c)).join(" + ")}
-                </p>
+                {convertible.length > 0 && (
+                  <p className="text-[12px] text-[var(--color-muted)]">
+                    {currencies.map((c) => formatNative(totals[c], c)).join(" + ")}
+                  </p>
+                )}
               </div>
             </div>
             <div className="mt-2.5 flex gap-2">

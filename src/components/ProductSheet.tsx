@@ -6,8 +6,8 @@ import Img from "./Img";
 import { IconCart, IconExternal, IconHeart, IconStar, IconX } from "./Icons";
 import { toast } from "./Toast";
 import { useStore } from "@/lib/store";
-import type { Product } from "@/lib/types";
-import { compact, formatNative, formatRub, plural, priceRange } from "@/lib/money";
+import type { Attribute, Product } from "@/lib/types";
+import { compact, formatNative, formatRub, needsConversion, plural, priceRange } from "@/lib/money";
 
 type Tab = "desc" | "specs" | "reviews";
 
@@ -34,16 +34,30 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
   const inCart = cart.some((c) => c.product.id === full.id);
   const isLiked = liked.some((p) => p.id === full.id);
 
-  // Выдача поиска обычно приходит без описания и отзывов — дотягиваем по ссылке.
+  // Выдача поиска приходит без описания и характеристик — дотягиваем по ссылке.
   useEffect(() => {
-    const thin = !product.description && product.reviews.length === 0 && product.attributes.length === 0;
-    if (!thin || product.source === "demo") return;
+    const thin = !product.description || product.attributes.length === 0;
+    if (!thin || product.source === "demo" || product.source === "catalog") return;
     let alive = true;
     setEnriching(true);
     fetch(`/api/item?url=${encodeURIComponent(product.url)}`)
       .then((r) => r.json())
-      .then((d: { product?: Product }) => {
-        if (alive && d.product) setFull({ ...d.product, id: product.id });
+      .then((d: { product?: Product; patch?: { description?: string; attributes?: Attribute[] } }) => {
+        if (!alive) return;
+        if (d.product) setFull({ ...d.product, id: product.id });
+        else if (d.patch) {
+          setFull((prev) => {
+            // Характеристики из выдачи и из карточки дополняют друг друга,
+            // повторы по названию отбрасываем.
+            const known = new Set(prev.attributes.map((a) => a.name.toLowerCase()));
+            const extra = (d.patch!.attributes ?? []).filter((a) => !known.has(a.name.toLowerCase()));
+            return {
+              ...prev,
+              description: prev.description || d.patch!.description,
+              attributes: [...prev.attributes, ...extra],
+            };
+          });
+        }
       })
       .catch(() => undefined)
       .finally(() => alive && setEnriching(false));
@@ -65,7 +79,7 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
   const tabs: [Tab, string][] = [
     ["desc", "Описание"],
     ["specs", `Характеристики${full.attributes.length ? ` ${full.attributes.length}` : ""}`],
-    ["reviews", `Отзывы${full.reviews.length ? ` ${full.reviews.length}` : ""}`],
+    ["reviews", `Отзывы${full.reviews.length || full.reviewsCount ? ` ${full.reviews.length || full.reviewsCount}` : ""}`],
   ];
 
   return (
@@ -97,7 +111,11 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
                 {formatRub(full.priceMax, full.currency, rates)}
               </span>
             )}
-            <span className="text-[13px] text-[var(--color-muted)]">{priceRange(full.price, full.priceMax, full.currency)}</span>
+            {needsConversion(full.currency) && (
+              <span className="text-[13px] text-[var(--color-muted)]">
+                {priceRange(full.price, full.priceMax, full.currency)}
+              </span>
+            )}
           </div>
           <h1 className="mt-2 text-[17px] font-semibold leading-snug">{full.title}</h1>
 
@@ -131,9 +149,11 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
                   </span>
                   <span className="font-semibold">
                     {formatRub(t.price, full.currency, rates)}
-                    <span className="ml-1.5 text-[12px] font-normal text-[var(--color-muted)]">
-                      {formatNative(t.price, full.currency)}
-                    </span>
+                    {needsConversion(full.currency) && (
+                      <span className="ml-1.5 text-[12px] font-normal text-[var(--color-muted)]">
+                        {formatNative(t.price, full.currency)}
+                      </span>
+                    )}
                   </span>
                 </div>
               ))}
@@ -164,11 +184,16 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
           <section className="mt-2 bg-[var(--color-surface)] px-4 py-4">
             <p className="text-[13px] font-semibold text-[var(--color-muted)]">Поставщик</p>
             <p className="mt-1 text-[15px] font-semibold">{full.seller.name}</p>
-            <p className="mt-0.5 text-[13px] text-[var(--color-muted)]">
-              {[full.seller.location, full.seller.years ? `${full.seller.years} лет на площадке` : null]
+            {(() => {
+              const line = [
+                full.seller.location,
+                full.seller.years ? `${full.seller.years} лет на площадке` : null,
+                full.seller.rating !== undefined ? `рейтинг ${full.seller.rating}` : null,
+              ]
                 .filter(Boolean)
-                .join(" · ") || "—"}
-            </p>
+                .join(" · ");
+              return line ? <p className="mt-0.5 text-[13px] text-[var(--color-muted)]">{line}</p> : null;
+            })()}
           </section>
         )}
 
@@ -331,7 +356,9 @@ function Reviews({ product }: { product: Product }) {
   if (!product.reviews.length) {
     return (
       <p className="text-[14px] text-[var(--color-muted)]">
-        {product.reviewsCount ? `Отзывов: ${product.reviewsCount}, но текстов парсер не отдал.` : "Отзывов пока нет."}
+        {product.reviewsCount
+          ? `У товара ${product.reviewsCount} ${plural(product.reviewsCount, "отзыв", "отзыва", "отзывов")}, но их тексты источник в выдаче не отдаёт.`
+          : "Отзывов пока нет."}
       </p>
     );
   }

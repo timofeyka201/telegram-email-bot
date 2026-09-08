@@ -15,6 +15,8 @@ const ALLOWED = [
   /(^|\.)picsum\.photos$/i,
   /(^|\.)unsplash\.com$/i,
   /(^|\.)dummyjson\.com$/i,
+  /(^|\.)wbbasket\.ru$/i,
+  /(^|\.)wb\.ru$/i,
 ];
 
 /**

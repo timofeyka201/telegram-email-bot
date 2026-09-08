@@ -37,6 +37,11 @@ export function priceRange(price: number | undefined, priceMax: number | undefin
   return formatNative(price, currency);
 }
 
+/** Для рублёвых товаров пересчёт совпадает с ценой — второй раз не показываем. */
+export function needsConversion(currency: string): boolean {
+  return currency !== "RUB";
+}
+
 export function plural(n: number, one: string, few: string, many: string): string {
   const m10 = n % 10;
   const m100 = n % 100;

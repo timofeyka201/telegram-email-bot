@@ -6,7 +6,7 @@ import Img from "./Img";
 import { IconFlame, IconInfo, IconStar } from "./Icons";
 import type { Product } from "@/lib/types";
 import type { Decision } from "@/lib/store";
-import { compact, formatNative, formatRub, plural } from "@/lib/money";
+import { compact, formatNative, formatRub, needsConversion, plural } from "@/lib/money";
 
 const SWIPE_DISTANCE = 110;
 const SWIPE_VELOCITY = 520;
@@ -57,7 +57,18 @@ export default function SwipeCard({ product, rates, depth, onDecide, onOpen, onD
     else onOpen();
   }
 
-  const hot = (product.soldCount ?? 0) > 5000;
+  const hot = (product.soldCount ?? 0) > 5000 || (product.reviewsCount ?? 0) > 2000;
+  // Показываем то, что источник реально отдал: продажи, иначе отзывы.
+  const meta = [
+    product.soldCount !== undefined
+      ? `${compact(product.soldCount)} ${plural(product.soldCount, "заказ", "заказа", "заказов")}`
+      : product.reviewsCount
+        ? `${compact(product.reviewsCount)} ${plural(product.reviewsCount, "отзыв", "отзыва", "отзывов")}`
+        : null,
+    product.seller?.location || product.seller?.name,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <motion.div
@@ -153,19 +164,16 @@ export default function SwipeCard({ product, rates, depth, onDecide, onOpen, onD
                 <span className="text-[22px] font-bold leading-none">
                   {formatRub(product.price, product.currency, rates)}
                 </span>
-                <span className="text-sm text-white/70">{formatNative(product.price, product.currency)}</span>
+                {needsConversion(product.currency) && (
+                  <span className="text-sm text-white/70">{formatNative(product.price, product.currency)}</span>
+                )}
                 {product.priceMax !== undefined && (
                   <span className="text-xs text-white/60 line-through">
                     {formatRub(product.priceMax, product.currency, rates)}
                   </span>
                 )}
               </div>
-              <p className="mt-1 truncate text-xs text-white/70">
-                {product.soldCount !== undefined
-                  ? `${compact(product.soldCount)} ${plural(product.soldCount, "заказ", "заказа", "заказов")}`
-                  : "Новинка"}
-                {product.seller?.location ? ` · ${product.seller.location}` : ""}
-              </p>
+              {meta && <p className="mt-1 truncate text-xs text-white/70">{meta}</p>}
             </div>
             <button
               type="button"
