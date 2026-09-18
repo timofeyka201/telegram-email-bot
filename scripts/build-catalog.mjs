@@ -17,6 +17,7 @@
  *   node scripts/build-catalog.mjs --queries="дрель,шуруповёрт"
  */
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
+import { pickProfile, request as wbRequest } from "./wb-transport.mjs";
 
 // ----------------------------------------------------------------- параметры
 const args = Object.fromEntries(
@@ -53,6 +54,10 @@ const QUERIES = args.queries
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** Способ обращения к маркетплейсу и cookie — выбираются предполётной проверкой. */
+let transport = null;
+let cookies = "";
+
 /**
  * Маркетплейс обслуживает только Россию и СНГ: из-за рубежа приходит 403.
  * Через прокси с российским выходом запросы проходят как обычные.
@@ -71,24 +76,32 @@ if (PROXY) {
 // ------------------------------------------------------------------- запросы
 async function getJson(url, tries = 5) {
   for (let attempt = 1; attempt <= tries; attempt++) {
+    const res = transport
+      ? await wbRequest(transport, url, { cookies })
+      : await (async () => {
+          try {
+            const r = await fetch(url, { headers: { Accept: "application/json", "User-Agent": UA, Referer: REFERER } });
+            return { status: r.status, body: await r.text() };
+          } catch (e) {
+            return { status: 0, body: "", error: e.message };
+          }
+        })();
+
+    if (res.status === 429 || res.status === 503) {
+      const wait = 1500 * attempt * attempt;
+      console.warn(`   лимит ${res.status}, пауза ${Math.round(wait / 1000)}с (попытка ${attempt}/${tries})`);
+      await sleep(wait);
+      continue;
+    }
+    if (res.status !== 200) {
+      if (attempt === tries) return null;
+      await sleep(800 * attempt);
+      continue;
+    }
     try {
-      const res = await fetch(url, {
-        headers: { Accept: "application/json", "User-Agent": UA, Referer: REFERER, "Accept-Language": "ru-RU,ru;q=0.9" },
-      });
-      if (res.status === 429 || res.status === 503) {
-        const wait = 1500 * attempt * attempt;
-        console.warn(`   лимит ${res.status}, пауза ${Math.round(wait / 1000)}с (попытка ${attempt}/${tries})`);
-        await sleep(wait);
-        continue;
-      }
-      if (!res.ok) return null;
-      return await res.json();
-    } catch (e) {
-      if (attempt === tries) {
-        console.warn(`   сеть: ${e.message}`);
-        return null;
-      }
-      await sleep(1000 * attempt);
+      return JSON.parse(res.body);
+    } catch {
+      return null;
     }
   }
   return null;
@@ -265,33 +278,35 @@ console.log(`цель: ${TARGET} товаров, запросов: ${QUERIES.len
  */
 async function preflight() {
   const probeUrl = searchUrl(QUERIES[0], 1);
-  const res = await fetch(probeUrl, {
-    headers: { Accept: "application/json", "User-Agent": UA, Referer: REFERER, "Accept-Language": "ru-RU,ru;q=0.9" },
-  }).catch((e) => ({ ok: false, status: 0, _err: e.message }));
+  console.log("подбираем способ обращения к маркетплейсу:");
 
-  if (res.status === 403) {
-    console.error(`\nМаркетплейс ответил 403 — он не обслуживает ваш регион.`);
-    console.error("Wildberries открыт для России и СНГ; из других стран приходит отказ.\n");
-    console.error("Что делать:");
-    console.error("  1. Включите VPN с выходом в России и запустите снова.");
-    console.error("  2. Либо укажите прокси с российским адресом:");
-    console.error("       node scripts/build-catalog.mjs --proxy=http://логин:пароль@хост:порт\n");
-    console.error("Проверить, дело ли в регионе: откройте в браузере на этом же");
-    console.error("компьютере ссылку ниже. Если браузер тоже показывает отказ — да, регион.");
-    console.error(`  ${probeUrl}\n`);
-    return false;
+  const { profile, cookies: jar, rows } = await pickProfile(probeUrl);
+  if (profile) {
+    transport = profile;
+    cookies = jar;
+    console.log(`\nработает: ${profile.label}${jar ? " + cookie" : ""}\n`);
+    return true;
   }
-  if (res.status === 429) {
-    console.error(`\nМаркетплейс ответил 429 — слишком много запросов с этого адреса.`);
-    console.error("Так отвечают серверам и облачным машинам. Подождите или смените адрес.\n");
-    return false;
+
+  const statuses = new Set(rows.map((r) => String(r.status)));
+  console.error("\nНи один способ не сработал.\n");
+
+  if (statuses.has("403")) {
+    console.error("Везде 403. Два варианта:");
+    console.error("  • маркетплейс не обслуживает ваш регион — включите VPN с выходом в России;");
+    console.error("  • либо он отличает наш запрос от браузерного.\n");
+    console.error("Чтобы различить, откройте эту ссылку в браузере на этом же компьютере:");
+    console.error(`  ${probeUrl}`);
+    console.error("Браузер тоже отказывает — дело в регионе. Открывает — пришлите таблицу выше.\n");
+  } else if (statuses.has("429")) {
+    console.error("Слишком много запросов с этого адреса. Подождите или смените подключение.\n");
+  } else {
+    console.error("Похоже на проблему с сетью. Проверьте подключение.\n");
   }
-  if (!res.ok) {
-    console.error(`\nПоиск недоступен: ${res.status || res._err}. Проверьте подключение к сети.\n`);
-    return false;
-  }
-  console.log("связь с маркетплейсом есть\n");
-  return true;
+
+  console.error("Обходной путь — прокси с российским адресом:");
+  console.error("  node scripts/build-catalog.mjs --proxy=http://логин:пароль@хост:порт\n");
+  return false;
 }
 
 async function collect() {
