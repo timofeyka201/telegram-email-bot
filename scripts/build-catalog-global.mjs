@@ -12,6 +12,7 @@
  *   node scripts/build-catalog-global.mjs --no-verify      # не проверять фото
  */
 import { writeFileSync, mkdirSync } from "node:fs";
+import { keepReal, imageLooksReal } from "./quality.mjs";
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
@@ -56,8 +57,7 @@ function cleanImage(raw) {
   if (typeof raw !== "string") return null;
   const s = raw.replace(/^[\s["']+|[\s\]"']+$/g, "").trim();
   if (!/^https?:\/\//i.test(s)) return null;
-  if (/placeimg|placeholder\.com|via\.placeholder|lorempixel/i.test(s)) return null;
-  return s;
+  return imageLooksReal(s) ? s : null;
 }
 
 /** Битые ссылки на фото встречаются часто — карточка без картинки ленте не нужна. */
@@ -204,6 +204,18 @@ for (const src of chosen) {
     added++;
   }
   console.log(`+${added} → всего ${products.length}`);
+}
+
+// Сначала выбрасываем заготовки и заглушки, и только потом тратим запросы на
+// проверку оставшихся фотографий.
+{
+  const before = products.length;
+  const good = keepReal(products);
+  if (good.length !== before) {
+    console.log(`\nотбраковано заготовок и заглушек: ${before - good.length}`);
+    products.length = 0;
+    products.push(...good);
+  }
 }
 
 if (VERIFY && products.length) {
