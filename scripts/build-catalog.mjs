@@ -36,6 +36,10 @@ const REFERER = "https://www.wildberries.ru/";
 const SEARCH_BASE = (process.env.WB_SEARCH_BASE || "https://search.wb.ru").replace(/\/+$/, "");
 const BASKET_BASE = process.env.WB_BASKET_BASE || "";
 const PUSH = args.push === true;
+const CHECK_ONLY = args.check === true;
+// Только явно заданный прокси: молча наследовать системный HTTPS_PROXY нельзя —
+// он перехватил бы и локальные адреса, игнорируя NO_PROXY.
+const PROXY = String(args.proxy || process.env.IMPORT_PROXY || "");
 
 const QUERIES = args.queries
   ? String(args.queries).split(",").map((s) => s.trim()).filter(Boolean)
@@ -48,6 +52,21 @@ const QUERIES = args.queries
      "гантели","коврик для йоги","палатка","термос","рюкзак туристический","конструктор","настольная игра"];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Маркетплейс обслуживает только Россию и СНГ: из-за рубежа приходит 403.
+ * Через прокси с российским выходом запросы проходят как обычные.
+ */
+if (PROXY) {
+  try {
+    const { ProxyAgent, setGlobalDispatcher } = await import("undici");
+    setGlobalDispatcher(new ProxyAgent(PROXY));
+    console.log(`через прокси: ${PROXY.replace(/\/\/[^@]*@/, "//***@")}`);
+  } catch {
+    console.error("Не удалось включить прокси: выполните npm install, чтобы поставить undici.");
+    process.exitCode = 1;
+  }
+}
 
 // ------------------------------------------------------------------- запросы
 async function getJson(url, tries = 5) {
@@ -239,49 +258,76 @@ if (existsSync(OUT)) {
 
 console.log(`цель: ${TARGET} товаров, запросов: ${QUERIES.length}, описания: ${WITH_CARDS ? "да" : "нет"}`);
 
-// Маркетплейс отвечает отказом на запросы из дата-центров. Проверяем это сразу,
-// чтобы не выяснять через десять минут пустого прогона.
-{
+/**
+ * Проверяем связь до начала работы: маркетплейс отвечает отказом и запросам из
+ * дата-центров, и запросам из-за пределов России. Лучше сказать об этом сразу,
+ * чем после десяти минут пустого прогона.
+ */
+async function preflight() {
   const probeUrl = searchUrl(QUERIES[0], 1);
   const res = await fetch(probeUrl, {
-    headers: { Accept: "application/json", "User-Agent": UA, Referer: REFERER },
+    headers: { Accept: "application/json", "User-Agent": UA, Referer: REFERER, "Accept-Language": "ru-RU,ru;q=0.9" },
   }).catch((e) => ({ ok: false, status: 0, _err: e.message }));
 
-  if (res.status === 429 || res.status === 403) {
-    console.error(`\nМаркетплейс ответил ${res.status} — этот адрес он не обслуживает.`);
-    console.error("Так бывает на сервере, в облаке или через VPN/прокси.");
-    console.error("Запустите скрипт с обычного домашнего или офисного подключения.\n");
-    process.exit(1);
+  if (res.status === 403) {
+    console.error(`\nМаркетплейс ответил 403 — он не обслуживает ваш регион.`);
+    console.error("Wildberries открыт для России и СНГ; из других стран приходит отказ.\n");
+    console.error("Что делать:");
+    console.error("  1. Включите VPN с выходом в России и запустите снова.");
+    console.error("  2. Либо укажите прокси с российским адресом:");
+    console.error("       node scripts/build-catalog.mjs --proxy=http://логин:пароль@хост:порт\n");
+    console.error("Проверить, дело ли в регионе: откройте в браузере на этом же");
+    console.error("компьютере ссылку ниже. Если браузер тоже показывает отказ — да, регион.");
+    console.error(`  ${probeUrl}\n`);
+    return false;
+  }
+  if (res.status === 429) {
+    console.error(`\nМаркетплейс ответил 429 — слишком много запросов с этого адреса.`);
+    console.error("Так отвечают серверам и облачным машинам. Подождите или смените адрес.\n");
+    return false;
   }
   if (!res.ok) {
     console.error(`\nПоиск недоступен: ${res.status || res._err}. Проверьте подключение к сети.\n`);
-    process.exit(1);
+    return false;
   }
   console.log("связь с маркетплейсом есть\n");
+  return true;
 }
 
-outer:
-for (const query of QUERIES) {
-  for (let page = 1; page <= MAX_PAGE; page++) {
-    if (products.length >= TARGET) break outer;
+async function collect() {
+  outer:
+  for (const query of QUERIES) {
+    for (let page = 1; page <= MAX_PAGE; page++) {
+      if (products.length >= TARGET) break outer;
 
-    const json = await getJson(searchUrl(query, page));
-    const items = json?.data?.products ?? json?.products ?? [];
-    if (!items.length) break;
+      const json = await getJson(searchUrl(query, page));
+      const items = json?.data?.products ?? json?.products ?? [];
+      if (!items.length) break;
 
-    let added = 0;
-    for (const it of items) {
-      if (products.length >= TARGET) break;
-      if (seenIds.has(`wb-${it.id}`)) continue;
-      const p = await toProduct(it, query);
-      if (p) { seenIds.add(p.id); products.push(p); added++; }
-    }
+      let added = 0;
+      for (const it of items) {
+        if (products.length >= TARGET) break;
+        if (seenIds.has(`wb-${it.id}`)) continue;
+        const p = await toProduct(it, query);
+        if (p) { seenIds.add(p.id); products.push(p); added++; }
+      }
     console.log(`«${query}» стр.${page}: +${added} → всего ${products.length}`);
     save(products);
     await sleep(GAP_MS);
+    }
   }
 }
 
+if (!(await preflight())) {
+  process.exitCode = 1;
+} else if (CHECK_ONLY) {
+  console.log("проверка пройдена — можно запускать без --check");
+} else {
+  await collect();
+  await finish();
+}
+
+async function finish() {
 save(products);
 const kb = Math.round(JSON.stringify(products).length / 1024);
 console.log(`\nготово: ${products.length} товаров, ${new Set(products.map((p) => p.category)).size} категорий, ${kb} КБ`);
@@ -303,4 +349,5 @@ if (PUSH) {
     console.log("не удалось запушить автоматически. Сделайте вручную:");
     console.log(`  git add ${OUT} && git commit -m "Update catalogue" && git push`);
   }
+}
 }
