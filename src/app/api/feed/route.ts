@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProvider, defaultProvider, PROVIDERS } from "@/lib/providers";
+import type { TasteHint } from "@/lib/taste";
 import type { FeedPage } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -15,6 +16,7 @@ type Body = {
   cursor?: string | null;
   seed?: number;
   filters?: { categories?: string[]; maxPrice?: number; onlyDiscount?: boolean };
+  hint?: TasteHint;
 };
 
 /**
@@ -51,7 +53,7 @@ export async function POST(req: NextRequest) {
     // Курсор принадлежит конкретному источнику — при переключении начинаем сначала.
     const cursor = provider.id === requested.id ? (body.cursor ?? null) : null;
     try {
-      const page = await provider.page({ query, cursor, seed, filters: body.filters });
+      const page = await provider.page({ query, cursor, seed, filters: body.filters, hint: body.hint });
       if (!page.products.length) {
         problems.push(`${provider.label}: пусто по запросу «${query || "витрина"}»`);
         continue;

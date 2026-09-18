@@ -3,9 +3,11 @@
 import { useState } from "react";
 import Sheet from "./Sheet";
 import { Mark } from "./Brand";
-import { IconAuto, IconMoon, IconSun, IconTrash } from "./Icons";
+import { IconAuto, IconChevron, IconMoon, IconRuler, IconSun, IconTrash } from "./Icons";
+import SizeProfileSheet from "./SizeProfileSheet";
 import { toast } from "./Toast";
 import { needsConversion, symbolOf } from "@/lib/money";
+import { hasSizes } from "@/lib/sizes";
 import { useStore } from "@/lib/store";
 
 const THEMES = [
@@ -34,6 +36,8 @@ export default function SettingsSheet({
   const stats = useStore((s) => s.stats);
   const resetAll = useStore((s) => s.resetAll);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [sizesOpen, setSizesOpen] = useState(false);
+  const sizes = useStore((s) => s.sizes);
 
   const cart = useStore((s) => s.cart);
   const liked = useStore((s) => s.liked);
@@ -94,6 +98,28 @@ export default function SettingsSheet({
         </>
       )}
 
+      <p className="mb-2 mt-6 text-[12px] font-bold uppercase tracking-wider text-[var(--color-muted)]">Профиль</p>
+      <button
+        type="button"
+        onClick={() => setSizesOpen(true)}
+        className="soft-shadow flex w-full items-center gap-3 rounded-2xl bg-[var(--color-surface)] px-4 py-3.5 text-left"
+      >
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-brand-soft)] text-[var(--color-brand)]">
+          <IconRuler className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[14px] font-semibold">Мои размеры</span>
+          <span className="block truncate text-[12px] text-[var(--color-muted)]">
+            {hasSizes(sizes)
+              ? [sizes.clothing && `одежда ${sizes.clothing}`, sizes.shoes && `обувь ${sizes.shoes}`, sizes.height && `рост ${sizes.height}`]
+                  .filter(Boolean)
+                  .join(" · ") || "заполнено"
+              : "Не заполнено — гайд по размерам подскажет ваш"}
+          </span>
+        </span>
+        <IconChevron className="h-5 w-5 shrink-0 text-[var(--color-muted)]" />
+      </button>
+
       <p className="mb-2 mt-6 text-[12px] font-bold uppercase tracking-wider text-[var(--color-muted)]">Статистика</p>
       <div className="soft-shadow grid grid-cols-3 gap-px overflow-hidden rounded-2xl bg-[var(--color-line)]">
         {[
@@ -144,6 +170,8 @@ export default function SettingsSheet({
       </button>
 
       <p className="mb-2 mt-6 text-center text-[12px] text-[var(--color-muted)]">Swiper · витрина со свайпами</p>
+
+      <SizeProfileSheet open={sizesOpen} onClose={() => setSizesOpen(false)} />
     </Sheet>
   );
 }

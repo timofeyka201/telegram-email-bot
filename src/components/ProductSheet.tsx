@@ -3,7 +3,9 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Img from "./Img";
-import { IconCart, IconExternal, IconHeart, IconStar, IconX } from "./Icons";
+import { IconBookmark, IconBookmarkFilled, IconCart, IconExternal, IconHeart, IconStar, IconX } from "./Icons";
+import SizeGuide from "./SizeGuide";
+import SizeProfileSheet from "./SizeProfileSheet";
 import { toast } from "./Toast";
 import { useStore } from "@/lib/store";
 import type { Attribute, Product } from "@/lib/types";
@@ -23,6 +25,8 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
   const rates = useStore((s) => s.rates);
   const cart = useStore((s) => s.cart);
   const liked = useStore((s) => s.liked);
+  const wishlist = useStore((s) => s.wishlist);
+  const toggleWish = useStore((s) => s.toggleWish);
   const addToCart = useStore((s) => s.addToCart);
   const unlike = useStore((s) => s.unlike);
   const like = useStore((s) => s.like);
@@ -30,8 +34,10 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
   const [full, setFull] = useState<Product>(product);
   const [enriching, setEnriching] = useState(false);
   const [tab, setTab] = useState<Tab>("desc");
+  const [sizesOpen, setSizesOpen] = useState(false);
 
   const inCart = cart.some((c) => c.product.id === full.id);
+  const wished = wishlist.some((p) => p.id === full.id);
   const isLiked = liked.some((p) => p.id === full.id);
 
   // Выдача поиска приходит без описания и характеристик — дотягиваем по ссылке.
@@ -197,6 +203,8 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
           </section>
         )}
 
+        <SizeGuide category={full.category} title={full.title} onEditProfile={() => setSizesOpen(true)} />
+
         <section className="mt-2 bg-[var(--color-surface)]">
           <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-[var(--color-line)] px-2">
             {tabs.map(([id, label]) => (
@@ -280,6 +288,22 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
         </button>
         <button
           type="button"
+          onClick={() => {
+            toggleWish(full);
+            toast(wished ? "Убрали из вишлиста" : "В вишлисте — следим за ценой", wished ? "default" : "like");
+          }}
+          aria-label={wished ? "Убрать из вишлиста" : "В вишлист"}
+          title={wished ? "Убрать из вишлиста" : "В вишлист — будем следить за ценой"}
+          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border transition-colors ${
+            wished
+              ? "border-transparent bg-[var(--color-brand-soft)] text-[var(--color-brand)]"
+              : "border-[var(--color-line)] text-[var(--color-muted)]"
+          }`}
+        >
+          {wished ? <IconBookmarkFilled className="h-6 w-6" /> : <IconBookmark className="h-6 w-6" />}
+        </button>
+        <button
+          type="button"
           disabled={inCart}
           onClick={() => {
             addToCart(full);
@@ -291,6 +315,8 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
           {inCart ? "Уже в корзине" : "В корзину"}
         </button>
       </div>
+
+      <SizeProfileSheet open={sizesOpen} onClose={() => setSizesOpen(false)} />
     </motion.div>
   );
 }

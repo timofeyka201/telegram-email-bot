@@ -5,7 +5,8 @@ import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Img from "@/components/Img";
 import ProductSheet from "@/components/ProductSheet";
-import { IconCart, IconHeart, IconTrash } from "@/components/Icons";
+import PriceDrops from "@/components/PriceDrops";
+import { IconBookmark, IconCart, IconHeart, IconTrash } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { categoryLabel } from "@/lib/categories";
 import { useHydrated, useStore } from "@/lib/store";
@@ -24,27 +25,34 @@ const SORTS: [Sort, string][] = [
 export default function LikesPage() {
   const hydrated = useHydrated();
   const liked = useStore((s) => s.liked);
+  const wishlist = useStore((s) => s.wishlist);
+  const toggleWish = useStore((s) => s.toggleWish);
+  const drops = useStore((s) => s.drops);
   const cart = useStore((s) => s.cart);
   const rates = useStore((s) => s.rates);
   const unlike = useStore((s) => s.unlike);
   const addToCart = useStore((s) => s.addToCart);
   const [sheet, setSheet] = useState<Product | null>(null);
   const [sort, setSort] = useState<Sort>("new");
+  const [tab, setTab] = useState<"liked" | "wish">("liked");
   const [category, setCategory] = useState<string | null>(null);
 
+  // Вишлист — отдельная полка: туда кладут осознанно и следят за ценой.
+  const source = tab === "liked" ? liked : wishlist;
+
   const categories = useMemo(
-    () => [...new Set(liked.map((p) => p.category).filter(Boolean) as string[])],
-    [liked],
+    () => [...new Set(source.map((p) => p.category).filter(Boolean) as string[])],
+    [source],
   );
 
   const shown = useMemo(() => {
-    const list = category ? liked.filter((p) => p.category === category) : [...liked];
+    const list = category ? source.filter((p) => p.category === category) : [...source];
     const rub = (p: Product) => toRub(p.price, p.currency, rates) ?? 0;
     if (sort === "cheap") return list.sort((a, b) => rub(a) - rub(b));
     if (sort === "expensive") return list.sort((a, b) => rub(b) - rub(a));
     if (sort === "rating") return list.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
     return list;
-  }, [liked, category, sort, rates]);
+  }, [source, category, sort, rates]);
 
   if (!hydrated) return <div className="flex-1" />;
 
@@ -52,16 +60,41 @@ export default function LikesPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <header className="sticky top-0 z-30 border-b border-[var(--color-line)] bg-[var(--color-surface)]/92 backdrop-blur-md">
+      <header className="sticky top-0 z-30 min-w-0 border-b border-[var(--color-line)] bg-[var(--color-surface)]/92 backdrop-blur-md">
         <div className="flex items-baseline justify-between px-4 pb-2 pt-3">
           <h1 className="font-display text-[20px] font-bold">Избранное</h1>
           <span className="tnum text-[13px] text-[var(--color-muted)]">
-            {liked.length} {plural(liked.length, "товар", "товара", "товаров")}
+            {source.length} {plural(source.length, "товар", "товара", "товаров")}
           </span>
         </div>
 
-        {liked.length > 0 && (
-          <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto px-4 pb-2">
+        <div className="mx-4 mb-2 flex rounded-full bg-[var(--color-surface-2)] p-1">
+          {(
+            [
+              ["liked", "Понравилось", liked.length],
+              ["wish", "Вишлист", wishlist.length],
+            ] as const
+          ).map(([id, label, count]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => {
+                setTab(id);
+                setCategory(null);
+              }}
+              aria-pressed={tab === id}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-full py-2 text-[13px] font-bold transition-colors ${
+                tab === id ? "bg-[var(--color-surface)] text-[var(--color-ink)] soft-shadow" : "text-[var(--color-muted)]"
+              }`}
+            >
+              {label}
+              {count > 0 && <span className="tnum opacity-60">{count}</span>}
+            </button>
+          ))}
+        </div>
+
+        {source.length > 0 && (
+          <div className="no-scrollbar flex w-full min-w-0 items-center gap-1.5 overflow-x-auto px-4 pb-2">
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as Sort)}
@@ -103,8 +136,10 @@ export default function LikesPage() {
         )}
       </header>
 
-      {liked.length === 0 ? (
-        <Empty />
+      {drops.length > 0 && <PriceDrops drops={drops} />}
+
+      {source.length === 0 ? (
+        <Empty kind={tab} />
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 p-4 pb-28">
@@ -166,10 +201,11 @@ export default function LikesPage() {
                       </button>
                       <button
                         type="button"
-                        aria-label="Убрать из избранного"
+                        aria-label={tab === "liked" ? "Убрать из избранного" : "Убрать из вишлиста"}
                         onClick={() => {
-                          unlike(p.id);
-                          toast("Убрали из избранного");
+                          if (tab === "liked") unlike(p.id);
+                          else toggleWish(p);
+                          toast("Убрали");
                         }}
                         className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--color-surface-2)] text-[var(--color-muted)]"
                       >
@@ -205,16 +241,27 @@ export default function LikesPage() {
   );
 }
 
-function Empty() {
+function Empty({ kind }: { kind: "liked" | "wish" }) {
+  const wish = kind === "wish";
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 px-10 text-center">
-      <span className="flex h-18 w-18 items-center justify-center rounded-full bg-[var(--color-like-soft)] p-5">
-        <IconHeart className="h-8 w-8 text-[var(--color-like)]" />
+      <span
+        className={`flex items-center justify-center rounded-full p-5 ${
+          wish ? "bg-[var(--color-brand-soft)]" : "bg-[var(--color-like-soft)]"
+        }`}
+      >
+        {wish ? (
+          <IconBookmark className="h-8 w-8 text-[var(--color-brand)]" />
+        ) : (
+          <IconHeart className="h-8 w-8 text-[var(--color-like)]" />
+        )}
       </span>
       <div>
-        <h2 className="font-display text-[18px] font-bold">Пока пусто</h2>
+        <h2 className="font-display text-[18px] font-bold">{wish ? "Вишлист пуст" : "Пока пусто"}</h2>
         <p className="mt-1.5 text-[14px] leading-snug text-[var(--color-muted)]">
-          Свайпайте карточки вправо — понравившееся будет собираться здесь.
+          {wish
+            ? "Откройте товар и нажмите закладку — будем следить за его ценой и скажем, когда подешевеет."
+            : "Свайпайте карточки вправо — понравившееся будет собираться здесь."}
         </p>
       </div>
       <Link href="/" className="brand-gradient rounded-2xl px-6 py-3 text-[15px] font-bold text-white">

@@ -6,6 +6,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import ActionBar from "@/components/ActionBar";
 import FilterSheet from "@/components/FilterSheet";
 import Onboarding from "@/components/Onboarding";
+import PriceDrops from "@/components/PriceDrops";
+import RejectReasonSheet from "@/components/RejectReasonSheet";
+import TasteQuiz from "@/components/TasteQuiz";
 import ProductSheet from "@/components/ProductSheet";
 import SettingsSheet from "@/components/SettingsSheet";
 import SwipeCard from "@/components/SwipeCard";
@@ -38,6 +41,15 @@ export default function DeckPage() {
   const filters = useStore((s) => s.filters);
   const query = useStore((s) => s.query);
   const onboarded = useStore((s) => s.onboarded);
+  const tasted = useStore((s) => s.tasted);
+  const pendingReason = useStore((s) => s.pendingReason);
+  const drops = useStore((s) => s.drops);
+  const liked = useStore((s) => s.liked);
+  const wishlist = useStore((s) => s.wishlist);
+  const cart = useStore((s) => s.cart);
+  const finishTaste = useStore((s) => s.finishTaste);
+  const answerReason = useStore((s) => s.answerReason);
+  const applyPrices = useStore((s) => s.applyPrices);
   const providerLabel = useStore((s) => s.providerLabel);
   const historyLen = useStore((s) => s.history.length);
   const decide = useStore((s) => s.decide);
@@ -59,6 +71,28 @@ export default function DeckPage() {
 
   const visible = deck.slice(index, index + VISIBLE);
   const remaining = Math.max(0, deck.length - index);
+
+  /**
+   * Снижение цены ищем один раз за запуск: сверяем запомненные цены отложенных
+   * товаров с текущими. Чаще не нужно — витрина меняется не ежеминутно.
+   */
+  const pricesChecked = useRef(false);
+  useEffect(() => {
+    if (!hydrated || pricesChecked.current) return;
+    const ids = [...new Set([...liked, ...wishlist, ...cart.map((c) => c.product)].map((p) => p.id))];
+    if (!ids.length) return;
+    pricesChecked.current = true;
+    fetch("/api/prices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    })
+      .then((r) => r.json())
+      .then((d: { prices?: Record<string, number> }) => {
+        if (d.prices) applyPrices(d.prices);
+      })
+      .catch(() => undefined);
+  }, [hydrated, liked, wishlist, cart, applyPrices]);
 
   useEffect(() => {
     fetch("/api/health")
@@ -98,7 +132,7 @@ export default function DeckPage() {
   // Клавиатура: на десктопе свайпать так же быстро, как пальцем.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (sheet || filtersOpen || settingsOpen || !onboarded) return;
+      if (sheet || filtersOpen || settingsOpen || !onboarded || !tasted || pendingReason) return;
       if (e.key === "ArrowRight") onDecide("like");
       else if (e.key === "ArrowLeft") onDecide("dislike");
       else if (e.key === "ArrowUp") onDecide("super");
@@ -111,7 +145,7 @@ export default function DeckPage() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onDecide, undo, sheet, filtersOpen, settingsOpen, onboarded, deck, index]);
+  }, [onDecide, undo, sheet, filtersOpen, settingsOpen, onboarded, tasted, pendingReason, deck, index]);
 
   /** Бесконечная лента: запас карточек пополняется заранее. */
   useEffect(() => {
@@ -165,6 +199,9 @@ export default function DeckPage() {
     <div className="flex flex-1 flex-col">
       <AnimatePresence>
         {!onboarded && <Onboarding onDone={finishOnboarding} />}
+        {onboarded && !tasted && facets.categories.length > 0 && (
+          <TasteQuiz categories={facets.categories} onDone={finishTaste} />
+        )}
       </AnimatePresence>
 
       <TopBar
@@ -242,7 +279,11 @@ export default function DeckPage() {
 
       <ActionBar onDecide={onDecide} onUndo={undo} canUndo={historyLen > 0} disabled={remaining === 0} />
 
+      {drops.length > 0 && <PriceDrops drops={drops} />}
+
       <ProductSheet product={sheet} onClose={() => setSheet(null)} />
+
+      <RejectReasonSheet product={pendingReason} onAnswer={answerReason} />
 
       <FilterSheet
         open={filtersOpen}

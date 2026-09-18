@@ -63,7 +63,7 @@ export default function TopBar({
   const filterCount = active.length + extraFilters;
 
   return (
-    <header className="sticky top-0 z-30 border-b border-[var(--color-line)] bg-[var(--color-surface)]/92 backdrop-blur-md">
+    <header className="sticky top-0 z-30 min-w-0 border-b border-[var(--color-line)] bg-[var(--color-surface)]/92 backdrop-blur-md">
       <div className="flex items-center gap-2 px-4 pb-1.5 pt-2.5">
         <Logo />
 
@@ -90,7 +90,7 @@ export default function TopBar({
       </div>
 
       {/* Быстрые фильтры на виду: один тап вместо похода в меню */}
-      <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto px-4 pb-2">
+      <div className="no-scrollbar flex w-full min-w-0 items-center gap-1.5 overflow-x-auto px-4 pb-2">
         <button
           type="button"
           onClick={onOpenFilters}

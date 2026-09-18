@@ -1,6 +1,7 @@
 "use client";
 
 import { useStore } from "./store";
+import { toHint } from "./taste";
 import type { FeedPage } from "./types";
 
 /**
@@ -16,14 +17,15 @@ export function isLoadingFeed(): boolean {
 export function loadNextPage(): Promise<{ ok: boolean; error?: string }> {
   if (inFlight) return inFlight;
 
-  const { provider, query, cursor, seed, filters, appendPage } = useStore.getState();
+  const { provider, query, cursor, seed, filters, taste, rejected, rates, appendPage } = useStore.getState();
+  const hint = toHint(taste, rejected, rates);
 
   inFlight = (async () => {
     try {
       const res = await fetch("/api/feed", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, query, cursor, seed, filters }),
+        body: JSON.stringify({ provider, query, cursor, seed, filters, hint }),
       });
       const data = (await res.json()) as FeedPage & { error?: string; problems?: string[] };
       if (!res.ok || !data.products?.length) {

@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { DEFAULT_RATES } from "./money";
+import { DEFAULT_RATES, toRub } from "./money";
+import { emptySizes, type SizeProfile } from "./sizes";
+import { emptyTaste, learn, learnReason, type RejectReason, type Taste } from "./taste";
 import type { Filters } from "./providers/types";
 import type { Product } from "./types";
 
@@ -20,10 +22,20 @@ export type Stats = {
   daySwipes: number;
 };
 
+/** Слежение за ценой: что стоил товар в момент, когда его отложили. */
+export type PriceWatch = { price: number; currency: string; since: string };
+export type PriceDrop = { id: string; title: string; image?: string; was: number; now: number; currency: string };
+
 const today = () => new Date().toISOString().slice(0, 10);
 const emptyStats = (): Stats => ({ swipes: 0, likes: 0, streak: 0, bestStreak: 0, day: today(), daySwipes: 0 });
 
 export const DAILY_GOAL = 20;
+
+/**
+ * Как часто спрашивать причину отказа. Вопрос должен быть редким: он полезен
+ * рекомендациям, но раздражает, если всплывает часто.
+ */
+export const ASK_REASON_EVERY = 200;
 
 /** Лента бесконечна, поэтому просмотренные карточки periodically выбрасываем. */
 const KEEP_BEHIND = 12;
@@ -33,7 +45,10 @@ type State = {
   deck: Product[];
   index: number;
   liked: Product[];
+  wishlist: Product[];
   seen: string[];
+  /** товары, отвергнутые явно: показывать их снова нельзя */
+  rejected: string[];
   cart: CartItem[];
   history: HistoryEntry[];
   stats: Stats;
@@ -41,8 +56,16 @@ type State = {
   query: string;
   filters: Filters;
   theme: "system" | "light" | "dark";
-  /** показывали ли подсказки по жестам */
   onboarded: boolean;
+  /** тест вкусов пройден (или пропущен) */
+  tasted: boolean;
+  taste: Taste;
+  sizes: SizeProfile;
+  watch: Record<string, PriceWatch>;
+  drops: PriceDrop[];
+  dropsSeen: boolean;
+  dislikesSinceAsk: number;
+  pendingReason: Product | null;
   provider: string | null;
   providerLabel: string;
   cursor: string | null;
@@ -54,6 +77,7 @@ type State = {
   undo: () => void;
   unlike: (id: string) => void;
   like: (product: Product) => void;
+  toggleWish: (product: Product) => void;
   addToCart: (product: Product, sku?: string) => void;
   setQty: (id: string, qty: number) => void;
   removeFromCart: (id: string) => void;
@@ -62,6 +86,11 @@ type State = {
   setFilters: (filters: Filters) => void;
   setTheme: (theme: "system" | "light" | "dark") => void;
   finishOnboarding: () => void;
+  finishTaste: (picked: string[], budget?: number) => void;
+  answerReason: (reason: RejectReason | null) => void;
+  setSizes: (sizes: SizeProfile) => void;
+  applyPrices: (current: Record<string, number>) => void;
+  dismissDrops: () => void;
   resetAll: () => void;
 };
 
@@ -71,7 +100,9 @@ export const useStore = create<State>()(
       deck: [],
       index: 0,
       liked: [],
+      wishlist: [],
       seen: [],
+      rejected: [],
       cart: [],
       history: [],
       stats: emptyStats(),
@@ -80,25 +111,25 @@ export const useStore = create<State>()(
       filters: {},
       theme: "system",
       onboarded: false,
+      tasted: false,
+      taste: emptyTaste(),
+      sizes: emptySizes(),
+      watch: {},
+      drops: [],
+      dropsSeen: true,
+      dislikesSinceAsk: 0,
+      pendingReason: null,
       provider: null,
       providerLabel: "",
       cursor: null,
       seed: Math.floor(Math.random() * 1e9),
 
       startFeed: ({ provider, query }) =>
-        set({
-          deck: [],
-          index: 0,
-          history: [],
-          cursor: null,
-          provider,
-          query,
-          seed: Math.floor(Math.random() * 1e9),
-        }),
+        set({ deck: [], index: 0, history: [], cursor: null, provider, query, seed: Math.floor(Math.random() * 1e9) }),
 
       appendPage: (products, cursor, provider, providerLabel) =>
         set((s) => {
-          const known = new Set([...s.deck.map((p) => p.id), ...s.seen]);
+          const known = new Set([...s.deck.map((p) => p.id), ...s.seen, ...s.rejected]);
           const fresh = products.filter((p) => !known.has(p.id));
           return { deck: [...s.deck, ...fresh], cursor, provider, providerLabel };
         }),
@@ -124,9 +155,7 @@ export const useStore = create<State>()(
         }
 
         const liked =
-          decision === "dislike" || s.liked.some((p) => p.id === product.id)
-            ? s.liked
-            : [product, ...s.liked];
+          decision === "dislike" || s.liked.some((p) => p.id === product.id) ? s.liked : [product, ...s.liked];
 
         const cart =
           decision === "super" && !s.cart.some((c) => c.product.id === product.id)
@@ -135,12 +164,23 @@ export const useStore = create<State>()(
 
         let deck = s.deck;
         let index = s.index + 1;
-        // Колода растёт бесконечно — подрезаем хвост, чтобы не раздувать память
-        // и localStorage. Отмена свайпа опирается на history, а не на колоду.
         if (index > TRIM_AT) {
           const cut = index - KEEP_BEHIND;
           deck = s.deck.slice(cut);
           index -= cut;
+        }
+
+        // Отказ — сигнал сильнее лайка: товар больше не показываем никогда.
+        const rejected = decision === "dislike" ? [product.id, ...s.rejected].slice(0, 2000) : s.rejected;
+
+        let dislikesSinceAsk = s.dislikesSinceAsk;
+        let pendingReason = s.pendingReason;
+        if (decision === "dislike") {
+          dislikesSinceAsk += 1;
+          if (dislikesSinceAsk >= ASK_REASON_EVERY) {
+            dislikesSinceAsk = 0;
+            pendingReason = product;
+          }
         }
 
         set({
@@ -148,9 +188,14 @@ export const useStore = create<State>()(
           index,
           liked,
           cart,
+          rejected,
+          dislikesSinceAsk,
+          pendingReason,
           seen: [product.id, ...s.seen].slice(0, 800),
           history: [{ product, decision }, ...s.history].slice(0, 30),
           stats,
+          taste: learn(s.taste, product, decision),
+          watch: decision === "dislike" ? s.watch : rememberPrice(s.watch, product),
         });
         return product;
       },
@@ -172,6 +217,9 @@ export const useStore = create<State>()(
             liked: last.decision === "dislike" ? s.liked : s.liked.filter((p) => p.id !== last.product.id),
             cart: last.decision === "super" ? s.cart.filter((c) => c.product.id !== last.product.id) : s.cart,
             seen: s.seen.filter((id) => id !== last.product.id),
+            rejected: s.rejected.filter((id) => id !== last.product.id),
+            // Отменённый отказ не должен учиться как отказ.
+            taste: learn(s.taste, last.product, last.decision === "dislike" ? "like" : "dislike"),
             stats,
           };
         }),
@@ -179,13 +227,25 @@ export const useStore = create<State>()(
       unlike: (id) => set((s) => ({ liked: s.liked.filter((p) => p.id !== id) })),
 
       like: (product) =>
-        set((s) => (s.liked.some((p) => p.id === product.id) ? s : { liked: [product, ...s.liked] })),
+        set((s) =>
+          s.liked.some((p) => p.id === product.id)
+            ? s
+            : { liked: [product, ...s.liked], watch: rememberPrice(s.watch, product) },
+        ),
+
+      toggleWish: (product) =>
+        set((s) => {
+          const has = s.wishlist.some((p) => p.id === product.id);
+          return has
+            ? { wishlist: s.wishlist.filter((p) => p.id !== product.id) }
+            : { wishlist: [product, ...s.wishlist], watch: rememberPrice(s.watch, product) };
+        }),
 
       addToCart: (product, sku) =>
         set((s) => {
           if (s.cart.some((c) => c.product.id === product.id)) return s;
           const qty = product.minOrder && product.minOrder > 1 ? product.minOrder : 1;
-          return { cart: [{ product, qty, sku }, ...s.cart] };
+          return { cart: [{ product, qty, sku }, ...s.cart], watch: rememberPrice(s.watch, product) };
         }),
 
       setQty: (id, qty) =>
@@ -197,10 +257,8 @@ export const useStore = create<State>()(
 
       clearCart: () => set({ cart: [] }),
 
-      setRate: (currency, rate) =>
-        set((s) => ({ rates: { ...s.rates, [currency]: rate > 0 ? rate : 1 } })),
+      setRate: (currency, rate) => set((s) => ({ rates: { ...s.rates, [currency]: rate > 0 ? rate : 1 } })),
 
-      // Смена фильтров пересобирает ленту: старый курсор относился к другой выборке.
       setFilters: (filters) =>
         set((s) => ({
           filters,
@@ -228,32 +286,98 @@ export const useStore = create<State>()(
 
       finishOnboarding: () => set({ onboarded: true }),
 
+      finishTaste: (picked, budget) =>
+        set((s) => ({
+          tasted: true,
+          taste: { ...s.taste, picked, budget },
+          // Ответы теста должны сразу отразиться на ленте.
+          deck: [],
+          index: 0,
+          cursor: null,
+          history: [],
+        })),
+
+      answerReason: (reason) =>
+        set((s) => {
+          const product = s.pendingReason;
+          if (!product || !reason) return { pendingReason: null };
+          const priceRub = toRub(product.price, product.currency, s.rates);
+          return { pendingReason: null, taste: learnReason(s.taste, product, reason, priceRub) };
+        }),
+
+      setSizes: (sizes) => set({ sizes }),
+
+      /** Сверяет текущие цены с запомненными и собирает список подешевевших. */
+      applyPrices: (current) =>
+        set((s) => {
+          const drops: PriceDrop[] = [];
+          const watch = { ...s.watch };
+          const known = [...s.liked, ...s.wishlist, ...s.cart.map((c) => c.product)];
+
+          for (const [id, now] of Object.entries(current)) {
+            const snap = watch[id];
+            if (!snap || now >= snap.price) {
+              // Цена выросла или впервые увидена — запоминаем как новую точку отсчёта.
+              if (snap && now > snap.price) watch[id] = { ...snap, price: now };
+              continue;
+            }
+            const product = known.find((p) => p.id === id);
+            drops.push({
+              id,
+              title: product?.title ?? "Товар",
+              image: product?.images[0],
+              was: snap.price,
+              now,
+              currency: snap.currency,
+            });
+          }
+          if (!drops.length) return { watch };
+          return { watch, drops, dropsSeen: false };
+        }),
+
+      dismissDrops: () =>
+        set((s) => {
+          // После просмотра точкой отсчёта становится новая, уже сниженная цена.
+          const watch = { ...s.watch };
+          for (const d of s.drops) {
+            if (watch[d.id]) watch[d.id] = { ...watch[d.id], price: d.now };
+          }
+          return { drops: [], dropsSeen: true, watch };
+        }),
+
       resetAll: () =>
         set({
           deck: [],
           index: 0,
           liked: [],
+          wishlist: [],
           seen: [],
+          rejected: [],
           cart: [],
           history: [],
           stats: emptyStats(),
           query: "",
           filters: {},
           cursor: null,
+          taste: emptyTaste(),
+          watch: {},
+          drops: [],
+          dropsSeen: true,
+          dislikesSinceAsk: 0,
         }),
     }),
     {
       name: "swipe1688",
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => localStorage),
-      migrate: () => undefined as unknown as State, // схема изменилась — начинаем с чистого листа
+      migrate: () => undefined as unknown as State,
       partialize: (s) => ({
-        // Колода уже ограничена подрезкой в decide, сохраняем её целиком:
-        // иначе index разъезжается с содержимым при перезагрузке.
         deck: s.deck,
         index: s.index,
         liked: s.liked.slice(0, 200),
+        wishlist: s.wishlist.slice(0, 200),
         seen: s.seen.slice(0, 400),
+        rejected: s.rejected.slice(0, 2000),
         cart: s.cart,
         stats: s.stats,
         rates: s.rates,
@@ -261,6 +385,12 @@ export const useStore = create<State>()(
         filters: s.filters,
         theme: s.theme,
         onboarded: s.onboarded,
+        tasted: s.tasted,
+        taste: s.taste,
+        sizes: s.sizes,
+        watch: s.watch,
+        // Счётчик обязан пережить перезагрузку, иначе «раз в 200» не накопится.
+        dislikesSinceAsk: s.dislikesSinceAsk,
         provider: s.provider,
         providerLabel: s.providerLabel,
         cursor: s.cursor,
@@ -270,10 +400,15 @@ export const useStore = create<State>()(
   ),
 );
 
-/**
- * До гидратации из localStorage разметка на сервере и на клиенте отличается,
- * поэтому компоненты со счётчиками ждут этот флаг вместо мигания пустотой.
- */
+/** Цену запоминаем один раз — при первом попадании товара в списки. */
+function rememberPrice(watch: Record<string, PriceWatch>, product: Product): Record<string, PriceWatch> {
+  if (product.price === undefined || watch[product.id]) return watch;
+  return {
+    ...watch,
+    [product.id]: { price: product.price, currency: product.currency, since: today() },
+  };
+}
+
 export function useHydrated(): boolean {
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => {

@@ -146,3 +146,29 @@ export const IconArrowRight = ({ className }: P) => (
     <path d="M4 12h15.5M14 6l6 6-6 6" />
   </svg>
 );
+
+export const IconBookmark = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="1.9" strokeLinejoin="round" aria-hidden>
+    <path d="M6.5 4.5h11a1 1 0 0 1 1 1V20l-6.5-4-6.5 4V5.5a1 1 0 0 1 1-1Z" />
+  </svg>
+);
+
+export const IconBookmarkFilled = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill={base} aria-hidden>
+    <path d="M6.5 4.5h11a1 1 0 0 1 1 1V20l-6.5-4-6.5 4V5.5a1 1 0 0 1 1-1Z" />
+  </svg>
+);
+
+export const IconPriceDown = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M4 7.5 10 13l3-3 7 6.5" />
+    <path d="M20 12v4.5h-4.5" />
+  </svg>
+);
+
+export const IconRuler = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="1.9" strokeLinejoin="round" aria-hidden>
+    <rect x="2.5" y="8" width="19" height="8" rx="1.6" />
+    <path d="M7 8v3M11 8v4M15 8v3M19 8v4" />
+  </svg>
+);

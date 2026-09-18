@@ -1,7 +1,9 @@
 import catalog from "../../../data/catalog.json";
 import { categoryLabel } from "../categories";
 import type { Product } from "../types";
-import { decodeCursor, encodeCursor, shuffle, type Filters, type PageArgs, type Provider, type ProviderPage } from "./types";
+import { toRub } from "../money";
+import type { TasteHint } from "../taste";
+import { decodeCursor, encodeCursor, mulberry32, shuffle, type Filters, type PageArgs, type Provider, type ProviderPage } from "./types";
 
 /**
  * Собственная база товаров: файл data/catalog.json, который отдаётся
@@ -44,6 +46,21 @@ function buildCategoryFacets(): string[] {
     .map(([label]) => label);
 }
 
+/**
+ * Цены отложенных товаров. Идентификаторы с суффиксом круга («-r1») указывают
+ * на тот же товар, поэтому суффикс отбрасываем.
+ */
+export function currentPrices(ids: string[]): Record<string, number> {
+  const byId = new Map(ALL.map((p) => [p.id, p]));
+  const out: Record<string, number> = {};
+  for (const id of ids) {
+    const base = id.replace(/-r\d+$/, "");
+    const price = byId.get(base)?.price;
+    if (price !== undefined) out[id] = price;
+  }
+  return out;
+}
+
 /** Диапазон цен и список категорий нужны панели фильтров. */
 export const catalogFacets = {
   categories: buildCategoryFacets(),
@@ -77,6 +94,29 @@ function passes(p: Product, f?: Filters): boolean {
   return true;
 }
 
+/**
+ * Оценка товара под профиль вкуса. Считается так, чтобы ни один сигнал не
+ * перебивал остальные полностью: лента должна подстраиваться, но не схлопываться
+ * в одну категорию.
+ */
+function score(p: Product, hint: TasteHint | undefined, rnd: () => number): number {
+  // Небольшой шум не даёт ленте застыть в одном и том же порядке.
+  let value = rnd() * 1.2;
+  if (!hint) return value;
+
+  const label = p.category ? categoryLabel(p.category) : undefined;
+  if (label && hint.picked?.includes(label)) value += 3;
+  if (label && hint.categories) value += hint.categories[label] ?? 0;
+  if (p.brand && hint.brands) value += (hint.brands[p.brand] ?? 0) * 0.7;
+
+  if (hint.budget !== undefined && p.price !== undefined) {
+    const rub = toRub(p.price, p.currency, hint.rates ?? {}) ?? p.price;
+    // Выход за бюджет наказывается тем сильнее, чем сильнее превышение.
+    if (rub > hint.budget) value -= Math.min(4, 1.5 + (rub / hint.budget - 1) * 2);
+  }
+  return value;
+}
+
 export const localProvider: Provider = {
   id: "local",
   label: "Своя база",
@@ -84,15 +124,26 @@ export const localProvider: Provider = {
   needsToken: false,
   ready: () => ALL.length > 0,
 
-  async page({ query, cursor, seed, filters }: PageArgs): Promise<ProviderPage> {
+  async page({ query, cursor, seed, filters, hint }: PageArgs): Promise<ProviderPage> {
     const { offset, round } = decodeCursor(cursor);
 
-    const pool = ALL.filter((p) => (query ? match(p, query) : true) && passes(p, filters));
+    // Отвергнутое исключаем жёстко: свайп влево — это «больше не показывай».
+    const banned = new Set(hint?.exclude ?? []);
+    const pool = ALL.filter(
+      (p) => !banned.has(p.id) && (query ? match(p, query) : true) && passes(p, filters),
+    );
     // Пустой результат — не повод показывать пустоту: откатываемся к витрине.
-    const source = pool.length ? pool : ALL;
+    const source = pool.length ? pool : ALL.filter((p) => !banned.has(p.id));
+    if (!source.length) return { products: [], cursor: encodeCursor(0, round), looped: false };
 
     // Порядок свой на каждый круг и на каждую сессию — лента не повторяется.
-    const ordered = shuffle(source, seed + round * 104729);
+    const rnd = mulberry32(seed + round * 104729);
+    const ordered = hint
+      ? source
+          .map((p) => ({ p, s: score(p, hint, rnd) }))
+          .sort((a, b) => b.s - a.s)
+          .map((x) => x.p)
+      : shuffle(source, seed + round * 104729);
     const slice = ordered.slice(offset, offset + PAGE);
 
     // Каталог конечен, поэтому на краю начинаем новый круг: карточки в ленте
