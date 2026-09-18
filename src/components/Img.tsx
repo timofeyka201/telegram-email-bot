@@ -1,10 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export function proxied(src: string): string {
-  if (!src) return "";
-  if (src.startsWith("/")) return src;
   return `/api/img?u=${encodeURIComponent(src)}`;
 }
 
@@ -12,15 +10,33 @@ type Props = {
   src?: string;
   alt: string;
   className?: string;
-  /** Показать «битую» заглушку вместо пустоты, если картинка не загрузилась */
+  /** Что показать, если картинку не удалось загрузить вовсе */
   fallbackLabel?: string;
   eager?: boolean;
 };
 
-export default function Img({ src, alt, className = "", fallbackLabel, eager }: Props) {
-  const [state, setState] = useState<"loading" | "ok" | "error">(src ? "loading" : "error");
+type Stage = "direct" | "proxy" | "failed";
 
-  if (!src || state === "error") {
+/**
+ * Картинки маркетплейсов грузятся в браузере напрямую с их CDN: запрос идёт с
+ * адреса пользователя, а не из дата-центра, поэтому не упирается в лимиты,
+ * которыми маркетплейсы встречают серверные запросы. Referer не отправляем —
+ * часть CDN отдаёт файл только при его отсутствии или «своём» значении.
+ *
+ * Если прямая загрузка всё же не удалась, пробуем через собственный прокси, и
+ * только потом показываем заглушку.
+ */
+export default function Img({ src, alt, className = "", fallbackLabel, eager }: Props) {
+  const local = !!src && src.startsWith("/");
+  const [stage, setStage] = useState<Stage>("direct");
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    setStage("direct");
+    setLoaded(false);
+  }, [src]);
+
+  if (!src || stage === "failed") {
     return (
       <div
         className={`${className} flex items-center justify-center text-[var(--color-muted)]`}
@@ -31,19 +47,26 @@ export default function Img({ src, alt, className = "", fallbackLabel, eager }: 
     );
   }
 
+  const url = stage === "direct" || local ? src : proxied(src);
+
   return (
     <span className={`${className} relative block overflow-hidden`}>
-      {state === "loading" && <span className="skeleton absolute inset-0" />}
+      {!loaded && <span className="skeleton absolute inset-0" />}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={proxied(src)}
+        key={url}
+        src={url}
         alt={alt}
         loading={eager ? "eager" : "lazy"}
         decoding="async"
         draggable={false}
-        onLoad={() => setState("ok")}
-        onError={() => setState("error")}
-        className={`h-full w-full object-cover transition-opacity duration-300 ${state === "ok" ? "opacity-100" : "opacity-0"}`}
+        referrerPolicy="no-referrer"
+        onLoad={() => setLoaded(true)}
+        onError={() => {
+          // Локальные адреса через прокси гонять незачем — сразу заглушка.
+          setStage(stage === "direct" && !local ? "proxy" : "failed");
+        }}
+        className={`h-full w-full object-cover transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
       />
     </span>
   );

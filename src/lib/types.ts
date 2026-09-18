@@ -53,7 +53,10 @@ export type Product = {
   reviewsCount?: number;
   soldCount?: number;
   reviews: Review[];
-  /** ISO-код валюты цены: CNY у 1688, USD у открытого каталога */
+  /** категория и бренд — для фильтров в собственной базе */
+  category?: string;
+  brand?: string;
+  /** ISO-код валюты цены: CNY у 1688, USD у открытого каталога, RUB у своей базы */
   currency: string;
   /** id провайдера, откуда пришла карточка */
   source: string;
