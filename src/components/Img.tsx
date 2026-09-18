@@ -39,8 +39,7 @@ export default function Img({ src, alt, className = "", fallbackLabel, eager }: 
   if (!src || stage === "failed") {
     return (
       <div
-        className={`${className} flex items-center justify-center text-[var(--color-muted)]`}
-        style={{ background: "linear-gradient(140deg, #f4f5f7 0%, #e9ecf1 100%)" }}
+        className={`${className} flex items-center justify-center bg-[var(--color-surface-2)] text-[var(--color-muted)]`}
       >
         <span className="px-4 text-center text-xs leading-snug">{fallbackLabel ?? "Нет изображения"}</span>
       </div>

@@ -9,7 +9,13 @@ export const maxDuration = 30;
 /** Бюджет на перебор источников: функция должна успеть ответить до лимита. */
 const BUDGET_MS = 20_000;
 
-type Body = { provider?: string; query?: string; cursor?: string | null; seed?: number };
+type Body = {
+  provider?: string;
+  query?: string;
+  cursor?: string | null;
+  seed?: number;
+  filters?: { categories?: string[]; maxPrice?: number; onlyDiscount?: boolean };
+};
 
 /**
  * Одна страница бесконечной ленты. Если выбранный источник упал или ничего не
@@ -45,7 +51,7 @@ export async function POST(req: NextRequest) {
     // Курсор принадлежит конкретному источнику — при переключении начинаем сначала.
     const cursor = provider.id === requested.id ? (body.cursor ?? null) : null;
     try {
-      const page = await provider.page({ query, cursor, seed });
+      const page = await provider.page({ query, cursor, seed, filters: body.filters });
       if (!page.products.length) {
         problems.push(`${provider.label}: пусто по запросу «${query || "витрина"}»`);
         continue;

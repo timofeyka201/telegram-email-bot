@@ -1,23 +1,101 @@
 @import "tailwindcss";
 
+/* ============================================================================
+   Swiper — система оформления
+   Токены объявлены один раз в :root, тёмная тема только переопределяет их:
+   так ни один цвет не может «потеряться» в одной из тем.
+   ========================================================================== */
+
 @theme {
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Unbounded", "Manrope", -apple-system, sans-serif;
+  --radius-card: 28px;
+}
 
-  --color-bg: #f2f3f5;
+:root {
+  color-scheme: light;
+
+  --color-bg: #f5f4fa;
   --color-surface: #ffffff;
-  --color-surface-2: #f7f8fa;
-  --color-ink: #1c1d21;
-  --color-muted: #7a7f87;
-  --color-line: #e7e9ec;
+  --color-surface-2: #f1f0f7;
+  --color-ink: #15141c;
+  --color-ink-soft: #3a3848;
+  --color-muted: #6f6d80;
+  --color-line: #e6e4f0;
 
-  --color-accent: #ff4d3c;
-  --color-accent-ink: #ffffff;
-  --color-like: #00b96b;
-  --color-nope: #ff3b30;
-  --color-super: #6c5ce7;
-  --color-amber: #ffb800;
+  --color-brand: #5b3df5;
+  --color-brand-2: #9b6bff;
+  --color-brand-ink: #ffffff;
+  --color-brand-soft: #efecff;
 
-  --radius-card: 22px;
+  --color-like: #12b886;
+  --color-like-soft: #e3f8f1;
+  --color-nope: #ff4757;
+  --color-nope-soft: #ffecee;
+  --color-super: #ffb020;
+  --color-super-soft: #fff4e0;
+
+  --shadow-card: 0 2px 6px rgba(21, 20, 28, .06), 0 18px 44px rgba(45, 33, 120, .14);
+  --shadow-soft: 0 1px 2px rgba(21, 20, 28, .05), 0 6px 18px rgba(45, 33, 120, .08);
+  --shadow-pop: 0 10px 30px rgba(45, 33, 120, .22);
+
+  --ring: 0 0 0 3px color-mix(in srgb, var(--color-brand) 35%, transparent);
+}
+
+/* Системная тема: применяется, пока пользователь не выбрал явно */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-bg: #0f0e15;
+    --color-surface: #1a1925;
+    --color-surface-2: #23222f;
+    --color-ink: #f2f1f7;
+    --color-ink-soft: #cfcddd;
+    --color-muted: #9a98ac;
+    --color-line: #2c2a3a;
+
+    --color-brand: #7c5cff;
+    --color-brand-2: #a98bff;
+    --color-brand-soft: #241f3d;
+
+    --color-like: #1fcf99;
+    --color-like-soft: #122c26;
+    --color-nope: #ff5c6a;
+    --color-nope-soft: #2e1720;
+    --color-super: #ffc04d;
+    --color-super-soft: #302510;
+
+    --shadow-card: 0 2px 6px rgba(0, 0, 0, .5), 0 18px 44px rgba(0, 0, 0, .55);
+    --shadow-soft: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 18px rgba(0, 0, 0, .35);
+    --shadow-pop: 0 10px 30px rgba(0, 0, 0, .5);
+  }
+}
+
+/* Явный выбор пользователя перекрывает системную тему в обе стороны */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #0f0e15;
+  --color-surface: #1a1925;
+  --color-surface-2: #23222f;
+  --color-ink: #f2f1f7;
+  --color-ink-soft: #cfcddd;
+  --color-muted: #9a98ac;
+  --color-line: #2c2a3a;
+
+  --color-brand: #7c5cff;
+  --color-brand-2: #a98bff;
+  --color-brand-soft: #241f3d;
+
+  --color-like: #1fcf99;
+  --color-like-soft: #122c26;
+  --color-nope: #ff5c6a;
+  --color-nope-soft: #2e1720;
+  --color-super: #ffc04d;
+  --color-super-soft: #302510;
+
+  --shadow-card: 0 2px 6px rgba(0, 0, 0, .5), 0 18px 44px rgba(0, 0, 0, .55);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 18px rgba(0, 0, 0, .35);
+  --shadow-pop: 0 10px 30px rgba(0, 0, 0, .5);
 }
 
 * {
@@ -30,13 +108,31 @@ body {
 }
 
 body {
+  margin: 0;
   background: var(--color-bg);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv01";
   overscroll-behavior-y: none;
 }
 
-/* Панель приложения: телефонная ширина по центру, на десктопе — карточка на фоне */
+/* Клавиатурная навигация должна быть видимой — но не мешать мыши */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+  border-radius: 12px;
+}
+
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- каркас */
 .app-shell {
   max-width: 480px;
   margin: 0 auto;
@@ -47,66 +143,63 @@ body {
 
 @media (min-width: 640px) {
   body {
-    background: radial-gradient(1200px 600px at 50% -10%, #ffe9e6 0%, #f2f3f5 55%);
+    background:
+      radial-gradient(1100px 560px at 50% -12%,
+        color-mix(in srgb, var(--color-brand) 16%, var(--color-bg)) 0%,
+        var(--color-bg) 58%);
   }
   .app-shell {
-    box-shadow: 0 0 0 1px var(--color-line), 0 24px 60px rgba(20, 22, 26, 0.12);
+    box-shadow: 0 0 0 1px var(--color-line), 0 30px 80px rgba(45, 33, 120, .18);
   }
 }
 
-.card-shadow {
-  box-shadow: 0 1px 2px rgba(20, 22, 26, 0.06), 0 12px 32px rgba(20, 22, 26, 0.1);
+.card-shadow { box-shadow: var(--shadow-card); }
+.soft-shadow { box-shadow: var(--shadow-soft); }
+.pop-shadow { box-shadow: var(--shadow-pop); }
+
+.brand-gradient {
+  background-image: linear-gradient(135deg, var(--color-brand) 0%, var(--color-brand-2) 100%);
 }
 
-.soft-shadow {
-  box-shadow: 0 1px 2px rgba(20, 22, 26, 0.05), 0 4px 14px rgba(20, 22, 26, 0.06);
-}
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
+/* ------------------------------------------------------------- состояния */
 .skeleton {
-  background: linear-gradient(90deg, #eceef1 25%, #f4f5f7 37%, #eceef1 63%);
+  background: linear-gradient(90deg,
+    var(--color-surface-2) 25%,
+    color-mix(in srgb, var(--color-surface-2) 60%, var(--color-surface)) 37%,
+    var(--color-surface-2) 63%);
   background-size: 400% 100%;
   animation: shimmer 1.3s ease-in-out infinite;
 }
 
 @keyframes shimmer {
-  0% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0 50%;
-  }
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
 }
 
 @keyframes pop {
-  0% {
-    transform: scale(0.6);
-    opacity: 0;
-  }
-  60% {
-    transform: scale(1.08);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
+  0% { transform: scale(.6); opacity: 0; }
+  60% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
 }
+.pop { animation: pop 260ms cubic-bezier(.2, .8, .2, 1) both; }
 
-.pop {
-  animation: pop 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+@keyframes rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
 }
+.rise { animation: rise 320ms cubic-bezier(.2, .8, .2, 1) both; }
+
+/* Пульс подсказки на зонах тапа — только в первые показы */
+@keyframes hintPulse {
+  0%, 100% { opacity: 0; }
+  40%, 60% { opacity: 1; }
+}
+.hint-pulse { animation: hintPulse 2.4s ease-in-out 2; }
 
 @media (prefers-reduced-motion: reduce) {
-  .skeleton,
-  .pop {
-    animation: none;
-  }
+  .skeleton, .pop, .rise, .hint-pulse { animation: none; }
+  * { transition-duration: 1ms !important; }
 }

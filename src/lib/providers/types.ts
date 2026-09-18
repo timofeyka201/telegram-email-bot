@@ -1,8 +1,17 @@
 import type { Product } from "../types";
 
+/** Ограничения витрины, которые пользователь задаёт в панели фильтров. */
+export type Filters = {
+  categories?: string[];
+  maxPrice?: number;
+  onlyDiscount?: boolean;
+};
+
 export type PageArgs = {
   /** поисковый запрос, пустая строка — вся витрина */
   query: string;
+  /** фильтры; источники, которые их не умеют, просто игнорируют */
+  filters?: Filters;
   /** непрозрачный курсор предыдущей страницы, null — начало ленты */
   cursor: string | null;
   /** зерно перетасовки: разные сессии видят разный порядок */

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { DEFAULT_RATES } from "./money";
+import type { Filters } from "./providers/types";
 import type { Product } from "./types";
 
 export type CartItem = { product: Product; qty: number; sku?: string };
@@ -38,6 +39,10 @@ type State = {
   stats: Stats;
   rates: Record<string, number>;
   query: string;
+  filters: Filters;
+  theme: "system" | "light" | "dark";
+  /** показывали ли подсказки по жестам */
+  onboarded: boolean;
   provider: string | null;
   providerLabel: string;
   cursor: string | null;
@@ -54,6 +59,9 @@ type State = {
   removeFromCart: (id: string) => void;
   clearCart: () => void;
   setRate: (currency: string, rate: number) => void;
+  setFilters: (filters: Filters) => void;
+  setTheme: (theme: "system" | "light" | "dark") => void;
+  finishOnboarding: () => void;
   resetAll: () => void;
 };
 
@@ -69,6 +77,9 @@ export const useStore = create<State>()(
       stats: emptyStats(),
       rates: { ...DEFAULT_RATES },
       query: "",
+      filters: {},
+      theme: "system",
+      onboarded: false,
       provider: null,
       providerLabel: "",
       cursor: null,
@@ -189,6 +200,34 @@ export const useStore = create<State>()(
       setRate: (currency, rate) =>
         set((s) => ({ rates: { ...s.rates, [currency]: rate > 0 ? rate : 1 } })),
 
+      // Смена фильтров пересобирает ленту: старый курсор относился к другой выборке.
+      setFilters: (filters) =>
+        set((s) => ({
+          filters,
+          deck: [],
+          index: 0,
+          history: [],
+          cursor: null,
+          seed: Math.floor(Math.random() * 1e9),
+          query: s.query,
+        })),
+
+      setTheme: (theme) => {
+        if (typeof document !== "undefined") {
+          if (theme === "system") delete document.documentElement.dataset.theme;
+          else document.documentElement.dataset.theme = theme;
+          try {
+            if (theme === "system") localStorage.removeItem("swiper-theme");
+            else localStorage.setItem("swiper-theme", theme);
+          } catch {
+            /* приватный режим — тема просто не переживёт перезагрузку */
+          }
+        }
+        set({ theme });
+      },
+
+      finishOnboarding: () => set({ onboarded: true }),
+
       resetAll: () =>
         set({
           deck: [],
@@ -199,6 +238,7 @@ export const useStore = create<State>()(
           history: [],
           stats: emptyStats(),
           query: "",
+          filters: {},
           cursor: null,
         }),
     }),
@@ -218,6 +258,9 @@ export const useStore = create<State>()(
         stats: s.stats,
         rates: s.rates,
         query: s.query,
+        filters: s.filters,
+        theme: s.theme,
+        onboarded: s.onboarded,
         provider: s.provider,
         providerLabel: s.providerLabel,
         cursor: s.cursor,

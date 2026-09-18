@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { hasToken } from "@/lib/bhapi";
 import { defaultProvider, providerInfo } from "@/lib/providers";
-import { catalogMeta } from "@/lib/providers/local";
+import { catalogFacets, catalogMeta } from "@/lib/providers/local";
 
 export const dynamic = "force-dynamic";
 
@@ -11,5 +11,6 @@ export async function GET() {
     providers: providerInfo(),
     defaultProvider: defaultProvider().id,
     catalog: catalogMeta,
+    facets: catalogFacets,
   });
 }

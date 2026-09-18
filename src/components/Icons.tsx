@@ -86,3 +86,63 @@ export const IconExternal = ({ className }: P) => (
     <path d="M18 14v4.5A1.5 1.5 0 0 1 16.5 20h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10" />
   </svg>
 );
+
+export const IconSliders = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="2" strokeLinecap="round" aria-hidden>
+    <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
+    <circle cx="16" cy="7" r="2.2" />
+    <circle cx="10" cy="17" r="2.2" />
+  </svg>
+);
+
+export const IconGear = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="1.8" strokeLinejoin="round" aria-hidden>
+    <path d="M10.4 3.2a1 1 0 0 1 .99-.85h1.22a1 1 0 0 1 .99.85l.2 1.33c.5.16.96.38 1.39.66l1.17-.63a1 1 0 0 1 1.24.24l.8.92a1 1 0 0 1 .03 1.27l-.83 1.05c.18.47.3.97.35 1.49l1.26.45a1 1 0 0 1 .66 1.08l-.2 1.2a1 1 0 0 1-.94.83l-1.34.05c-.2.48-.47.92-.79 1.32l.47 1.25a1 1 0 0 1-.42 1.2l-1.05.6a1 1 0 0 1-1.24-.2l-.92-.98c-.5.14-1.01.22-1.55.24l-.62 1.19a1 1 0 0 1-1.15.51l-1.17-.32a1 1 0 0 1-.73-1.04l.1-1.34a6.5 6.5 0 0 1-1.25-.9l-1.26.45a1 1 0 0 1-1.2-.45l-.6-1.06a1 1 0 0 1 .2-1.25l1.02-.88a6.4 6.4 0 0 1-.18-1.52l-1.2-.6a1 1 0 0 1-.5-1.18l.38-1.16a1 1 0 0 1 1.06-.69l1.33.14c.27-.43.59-.83.95-1.18l-.38-1.29a1 1 0 0 1 .5-1.17l1.09-.55a1 1 0 0 1 1.23.27l.84 1.04c.5-.1 1-.16 1.52-.16Z" />
+    <circle cx="12" cy="12" r="3.1" />
+  </svg>
+);
+
+export const IconSun = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="2" strokeLinecap="round" aria-hidden>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2.5v2M12 19.5v2M21.5 12h-2M4.5 12h-2M18.4 5.6 17 7M7 17l-1.4 1.4M18.4 18.4 17 17M7 7 5.6 5.6" />
+  </svg>
+);
+
+export const IconMoon = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill={base} aria-hidden>
+    <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" />
+  </svg>
+);
+
+export const IconAuto = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="1.9" aria-hidden>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 3.5v17" />
+    <path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill={base} stroke="none" />
+  </svg>
+);
+
+export const IconCheck = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="m5 12.5 4.5 4.5L19 7" />
+  </svg>
+);
+
+export const IconArrowLeft = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M20 12H4.5M10 6 4 12l6 6" />
+  </svg>
+);
+
+export const IconArrowUp = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M12 20V4.5M6 10l6-6 6 6" />
+  </svg>
+);
+
+export const IconArrowRight = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M4 12h15.5M14 6l6 6-6 6" />
+  </svg>
+);

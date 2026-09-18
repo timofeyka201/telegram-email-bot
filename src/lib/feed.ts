@@ -16,14 +16,14 @@ export function isLoadingFeed(): boolean {
 export function loadNextPage(): Promise<{ ok: boolean; error?: string }> {
   if (inFlight) return inFlight;
 
-  const { provider, query, cursor, seed, appendPage } = useStore.getState();
+  const { provider, query, cursor, seed, filters, appendPage } = useStore.getState();
 
   inFlight = (async () => {
     try {
       const res = await fetch("/api/feed", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, query, cursor, seed }),
+        body: JSON.stringify({ provider, query, cursor, seed, filters }),
       });
       const data = (await res.json()) as FeedPage & { error?: string; problems?: string[] };
       if (!res.ok || !data.products?.length) {

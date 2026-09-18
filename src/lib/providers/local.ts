@@ -1,6 +1,7 @@
 import catalog from "../../../data/catalog.json";
+import { categoryLabel } from "../categories";
 import type { Product } from "../types";
-import { decodeCursor, encodeCursor, shuffle, type PageArgs, type Provider, type ProviderPage } from "./types";
+import { decodeCursor, encodeCursor, shuffle, type Filters, type PageArgs, type Provider, type ProviderPage } from "./types";
 
 /**
  * Собственная база товаров: файл data/catalog.json, который отдаётся
@@ -24,6 +25,32 @@ const FILE = catalog as unknown as CatalogFile;
 const ALL: Product[] = Array.isArray(FILE.products) ? FILE.products : [];
 const PAGE = 12;
 
+/**
+ * Категории приходят из разных источников разными слагами: «furniture» и
+ * «Furniture» — это одно и то же. Схлопываем их по русскому ярлыку, он же
+ * становится значением фильтра. Одиночные категории в список не берём: выбирать
+ * из них нечего, а строку фильтров они забивают.
+ */
+function buildCategoryFacets(): string[] {
+  const counts = new Map<string, number>();
+  for (const p of ALL) {
+    if (!p.category) continue;
+    const label = categoryLabel(p.category);
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .filter(([, n]) => n >= 2)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ru"))
+    .map(([label]) => label);
+}
+
+/** Диапазон цен и список категорий нужны панели фильтров. */
+export const catalogFacets = {
+  categories: buildCategoryFacets(),
+  maxPrice: ALL.reduce((max, p) => (p.price !== undefined && p.price > max ? p.price : max), 0),
+  currency: ALL[0]?.currency ?? "RUB",
+};
+
 export const catalogMeta = {
   kind: FILE.kind ?? "unknown",
   generatedAt: FILE.generatedAt ?? null,
@@ -40,6 +67,16 @@ function match(p: Product, q: string): boolean {
   return p.attributes.some((a) => a.value.toLowerCase().includes(needle));
 }
 
+/** Фильтры применяются к своей базе — у неё есть и категории, и цены. */
+function passes(p: Product, f?: Filters): boolean {
+  if (!f) return true;
+  // В фильтре лежат ярлыки, а не слаги — так совпадают синонимы из разных источников.
+  if (f.categories?.length && (!p.category || !f.categories.includes(categoryLabel(p.category)))) return false;
+  if (f.maxPrice !== undefined && (p.price === undefined || p.price > f.maxPrice)) return false;
+  if (f.onlyDiscount && !(p.priceMax !== undefined && p.price !== undefined && p.priceMax > p.price)) return false;
+  return true;
+}
+
 export const localProvider: Provider = {
   id: "local",
   label: "Своя база",
@@ -47,10 +84,11 @@ export const localProvider: Provider = {
   needsToken: false,
   ready: () => ALL.length > 0,
 
-  async page({ query, cursor, seed }: PageArgs): Promise<ProviderPage> {
+  async page({ query, cursor, seed, filters }: PageArgs): Promise<ProviderPage> {
     const { offset, round } = decodeCursor(cursor);
 
-    const pool = query ? ALL.filter((p) => match(p, query)) : ALL;
+    const pool = ALL.filter((p) => (query ? match(p, query) : true) && passes(p, filters));
+    // Пустой результат — не повод показывать пустоту: откатываемся к витрине.
     const source = pool.length ? pool : ALL;
 
     // Порядок свой на каждый круг и на каждую сессию — лента не повторяется.
