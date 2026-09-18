@@ -33,6 +33,10 @@ const GAP_MS = Number(args.gap || 450);
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 const REFERER = "https://www.wildberries.ru/";
 
+const SEARCH_BASE = (process.env.WB_SEARCH_BASE || "https://search.wb.ru").replace(/\/+$/, "");
+const BASKET_BASE = process.env.WB_BASKET_BASE || "";
+const PUSH = args.push === true;
+
 const QUERIES = args.queries
   ? String(args.queries).split(",").map((s) => s.trim()).filter(Boolean)
   : ["кроссовки","куртка","джинсы","футболка","платье","свитшот","худи","рюкзак","сумка","кошелёк",
@@ -72,7 +76,7 @@ async function getJson(url, tries = 5) {
 }
 
 function searchUrl(query, page) {
-  return `https://search.wb.ru/exactmatch/ru/common/v13/search?ab_testing=false&appType=1&curr=rub` +
+  return `${SEARCH_BASE}/exactmatch/ru/common/v13/search?ab_testing=false&appType=1&curr=rub` +
     `&dest=-1257786&hide_dtype=13&lang=ru&page=${page}&query=${encodeURIComponent(query)}` +
     `&resultset=catalog&sort=popular&spp=30&suppressSpellcheck=false`;
 }
@@ -82,7 +86,7 @@ const VARIANTS = ["big/%N.webp", "c516x688/%N.webp", "big/%N.jpg"];
 const basketCache = new Map();
 
 const volPart = (id) => ({ vol: Math.floor(id / 100000), part: Math.floor(id / 1000) });
-const host = (n) => `https://basket-${String(n).padStart(2, "0")}.wbbasket.ru`;
+const host = (n) => (BASKET_BASE ? `${BASKET_BASE}/b${n}` : `https://basket-${String(n).padStart(2, "0")}.wbbasket.ru`);
 const imgUrl = (h, id, n, variant) => {
   const { vol, part } = volPart(id);
   return `${h}/vol${vol}/part${part}/${id}/images/${variant.replace("%N", String(n))}`;
@@ -233,7 +237,28 @@ if (existsSync(OUT)) {
   } catch { /* повреждённый файл просто перезапишем */ }
 }
 
-console.log(`цель: ${TARGET} товаров, запросов: ${QUERIES.length}, описания: ${WITH_CARDS ? "да" : "нет"}\n`);
+console.log(`цель: ${TARGET} товаров, запросов: ${QUERIES.length}, описания: ${WITH_CARDS ? "да" : "нет"}`);
+
+// Маркетплейс отвечает отказом на запросы из дата-центров. Проверяем это сразу,
+// чтобы не выяснять через десять минут пустого прогона.
+{
+  const probeUrl = searchUrl(QUERIES[0], 1);
+  const res = await fetch(probeUrl, {
+    headers: { Accept: "application/json", "User-Agent": UA, Referer: REFERER },
+  }).catch((e) => ({ ok: false, status: 0, _err: e.message }));
+
+  if (res.status === 429 || res.status === 403) {
+    console.error(`\nМаркетплейс ответил ${res.status} — этот адрес он не обслуживает.`);
+    console.error("Так бывает на сервере, в облаке или через VPN/прокси.");
+    console.error("Запустите скрипт с обычного домашнего или офисного подключения.\n");
+    process.exit(1);
+  }
+  if (!res.ok) {
+    console.error(`\nПоиск недоступен: ${res.status || res._err}. Проверьте подключение к сети.\n`);
+    process.exit(1);
+  }
+  console.log("связь с маркетплейсом есть\n");
+}
 
 outer:
 for (const query of QUERIES) {
@@ -263,4 +288,19 @@ console.log(`\nготово: ${products.length} товаров, ${new Set(produc
 console.log(`файл: ${OUT}`);
 if (products.length < TARGET) {
   console.log(`\nнабралось меньше цели — добавьте запросы через --queries или увеличьте --max-page`);
+}
+
+if (PUSH) {
+  const { execSync } = await import("node:child_process");
+  const run = (cmd) => execSync(cmd, { stdio: "inherit" });
+  try {
+    console.log("\nвыкладываем базу в репозиторий…");
+    run(`git add ${OUT}`);
+    run(`git commit -m "Update catalogue: ${products.length} products from Wildberries"`);
+    run("git push");
+    console.log("готово — деплой подхватит базу автоматически");
+  } catch {
+    console.log("не удалось запушить автоматически. Сделайте вручную:");
+    console.log(`  git add ${OUT} && git commit -m "Update catalogue" && git push`);
+  }
 }
