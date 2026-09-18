@@ -8,7 +8,9 @@
     "start": "next start -p 3000",
     "lint": "next lint",
     "seed": "node scripts/make-seed.mjs",
-    "build:catalog": "node scripts/build-catalog.mjs"
+    "build:catalog": "node scripts/build-catalog.mjs",
+    "probe": "node scripts/probe-sources.mjs",
+    "catalog:global": "node scripts/build-catalog-global.mjs"
   },
   "dependencies": {
     "framer-motion": "^11.11.17",
