@@ -11,7 +11,8 @@
     "build:catalog": "node scripts/build-catalog.mjs",
     "probe": "node scripts/probe-sources.mjs",
     "catalog:global": "node scripts/build-catalog-global.mjs",
-    "catalog:clean": "node scripts/clean-catalog.mjs"
+    "catalog:clean": "node scripts/clean-catalog.mjs",
+    "catalog:ali": "node scripts/build-catalog-aliexpress.mjs"
   },
   "dependencies": {
     "framer-motion": "^11.11.17",
