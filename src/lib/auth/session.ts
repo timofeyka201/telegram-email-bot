@@ -5,13 +5,20 @@ import { authStore, type UserRecord } from "./store";
 export const SESSION_COOKIE = "swiper_session";
 const SESSION_DAYS = 30;
 
-export type PublicUser = { id: string; email: string; name?: string; createdAt: string };
+export type PublicUser = {
+  id: string;
+  email: string;
+  name?: string;
+  createdAt: string;
+  emailVerified: boolean;
+};
 
 export const toPublic = (u: UserRecord): PublicUser => ({
   id: u.id,
   email: u.email,
   name: u.name,
   createdAt: u.createdAt,
+  emailVerified: !!u.emailVerified,
 });
 
 export const newUserId = () => randomUUID();
@@ -19,8 +26,9 @@ export const newUserId = () => randomUUID();
 /** Токен сессии — случайные 32 байта: угадать нельзя, отозвать можно. */
 export async function startSession(userId: string): Promise<void> {
   const token = randomBytes(32).toString("base64url");
-  const expiresAt = Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000;
-  await authStore().putSession(token, { userId, expiresAt });
+  const issuedAt = Date.now();
+  const expiresAt = issuedAt + SESSION_DAYS * 24 * 60 * 60 * 1000;
+  await authStore().putSession(token, { userId, expiresAt, issuedAt });
 
   const jar = await cookies();
   jar.set(SESSION_COOKIE, token, {
@@ -51,7 +59,17 @@ export async function currentUser(): Promise<UserRecord | null> {
     if (session) await store.deleteSession(token);
     return null;
   }
-  return store.getUser(session.userId);
+
+  const user = await store.getUser(session.userId);
+  if (!user) return null;
+
+  // Смена пароля обесценивает все входы, сделанные до неё. Сессии, выданные до
+  // появления этого поля, считаем действительными: issuedAt у них нет.
+  if (user.passwordChangedAt && (session.issuedAt ?? Infinity) < user.passwordChangedAt) {
+    await store.deleteSession(token);
+    return null;
+  }
+  return user;
 }
 
 /**

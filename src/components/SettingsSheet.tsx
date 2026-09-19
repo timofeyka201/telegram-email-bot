@@ -40,6 +40,7 @@ export default function SettingsSheet({
   const [confirmReset, setConfirmReset] = useState(false);
   const [sizesOpen, setSizesOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
+  const [verifySending, setVerifySending] = useState(false);
   const account = useStore((s) => s.account);
   const setAccount = useStore((s) => s.setAccount);
   const sizes = useStore((s) => s.sizes);
@@ -81,7 +82,39 @@ export default function SettingsSheet({
             <IconExit className="h-5 w-5" />
           </button>
         </div>
-      ) : (
+      ) : null}
+
+      {account && account.emailVerified === false && (
+        <div className="mt-2 rounded-2xl bg-[var(--color-super-soft)] px-4 py-3">
+          <p className="text-[13px] leading-snug text-[var(--color-ink-soft)]">
+            Почта не подтверждена. Без этого не получится восстановить пароль, если он забудется.
+          </p>
+          <button
+            type="button"
+            disabled={verifySending}
+            onClick={async () => {
+              setVerifySending(true);
+              try {
+                const res = await fetch("/api/auth/verify/send", { method: "POST" });
+                const data = (await res.json()) as { ok?: boolean; error?: string };
+                toast(
+                  data.ok ? "Письмо отправлено — проверьте почту" : (data.error ?? "Не получилось отправить"),
+                  data.ok ? "like" : "warn",
+                );
+              } catch {
+                toast("Сервер не отвечает", "warn");
+              } finally {
+                setVerifySending(false);
+              }
+            }}
+            className="mt-2 rounded-xl bg-[var(--color-surface)] px-3.5 py-2 text-[13px] font-bold text-[var(--color-ink)] disabled:opacity-50"
+          >
+            {verifySending ? "Отправляем…" : "Выслать письмо ещё раз"}
+          </button>
+        </div>
+      )}
+
+      {!account && (
         <button
           type="button"
           onClick={() => setAuthOpen(true)}

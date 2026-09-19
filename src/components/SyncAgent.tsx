@@ -19,20 +19,25 @@ export default function SyncAgent() {
     let alive = true;
     fetch("/api/auth/me", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d: { user: { id: string; email: string; name?: string; createdAt: string } | null }) => {
+      .then(
+        (d: {
+          user: { id: string; email: string; name?: string; createdAt: string; emailVerified?: boolean } | null;
+        }) => {
         if (!alive) return;
         const current = useStore.getState().account;
         if (d.user) {
           // Тот же аккаунт — обычное возобновление; другой или первый вход с
           // этого устройства — слияние, иначе локальные данные затрут аккаунт.
           const isSame = current?.id === d.user.id;
-          if (!isSame) setAccount(d.user);
+          // Запись обновляем всегда: подтвердить почту могли в другой вкладке.
+          if (!isSame || current?.emailVerified !== d.user.emailVerified) setAccount(d.user);
           void (isSame ? pullProfile() : syncOnLogin());
         } else if (current) {
           // Сессия истекла: данные оставляем, но перестаём их отправлять.
           setAccount(null);
         }
-      })
+        },
+      )
       .catch(() => undefined);
     return () => {
       alive = false;

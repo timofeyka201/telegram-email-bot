@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { authStore, storageWarning } from "@/lib/auth/store";
 import { clientKey, newUserId, startSession, toPublic, tooManyAttempts, noteFailure } from "@/lib/auth/session";
 import { emailProblem, hashPassword, normalizeEmail, passwordProblem } from "@/lib/auth/password";
+import { appUrl, sendMail, verifyEmail } from "@/lib/auth/mail";
+import { issueToken } from "@/lib/auth/tokens";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,5 +66,22 @@ export async function POST(req: Request) {
   }
 
   await startSession(user.id);
-  return NextResponse.json({ user: toPublic(user), warning: storageWarning() });
+
+  // Письмо шлём после того, как аккаунт уже создан и сессия открыта: упавшая
+  // почта не должна отменять регистрацию, о которой человека уже уведомили.
+  let mail: string | undefined;
+  try {
+    const link = `${await appUrl()}/verify?token=${await issueToken("verify", user.id)}`;
+    const letter = verifyEmail(link);
+    const sent = await sendMail(user.email, letter.subject, letter.html, letter.text);
+    if (!sent.delivered) {
+      console.error("Письмо с подтверждением не отправлено:", sent.reason);
+      mail = sent.reason;
+    }
+  } catch (e) {
+    console.error("Письмо с подтверждением не отправлено:", e);
+    mail = e instanceof Error ? e.message : "почта недоступна";
+  }
+
+  return NextResponse.json({ user: toPublic(user), warning: storageWarning(), mailProblem: mail });
 }

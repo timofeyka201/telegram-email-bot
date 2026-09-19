@@ -24,7 +24,7 @@ export type Stats = {
 
 /** Слежение за ценой: что стоил товар в момент, когда его отложили. */
 export type PriceWatch = { price: number; currency: string; since: string };
-export type Account = { id: string; email: string; name?: string; createdAt: string };
+export type Account = { id: string; email: string; name?: string; createdAt: string; emailVerified?: boolean };
 
 /** Что уезжает в облако при входе: всё личное, но не служебное. */
 export type SyncedProfile = {

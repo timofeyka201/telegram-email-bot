@@ -7,9 +7,17 @@ export type UserRecord = {
   name?: string;
   passwordHash: string;
   createdAt: string;
+  /** Почта подтверждена переходом по ссылке из письма. */
+  emailVerified?: boolean;
+  /**
+   * Момент последней смены пароля. Сессии, выданные раньше, считаются
+   * недействительными — так смена пароля выбрасывает всех, кто уже вошёл,
+   * не требуя от хранилища вести список сессий и уметь его не потерять.
+   */
+  passwordChangedAt?: number;
 };
 
-export type SessionRecord = { userId: string; expiresAt: number };
+export type SessionRecord = { userId: string; expiresAt: number; issuedAt: number };
 
 export interface AuthStore {
   readonly kind: "redis" | "file";
@@ -19,9 +27,15 @@ export interface AuthStore {
   userIdByEmail(email: string): Promise<string | null>;
   getUser(id: string): Promise<UserRecord | null>;
   createUser(user: UserRecord): Promise<void>;
+  /** Перезапись существующей записи: смена пароля, отметка о подтверждении почты. */
+  updateUser(user: UserRecord): Promise<void>;
   putSession(token: string, session: SessionRecord): Promise<void>;
   getSession(token: string): Promise<SessionRecord | null>;
   deleteSession(token: string): Promise<void>;
+  /** Одноразовый ключ (подтверждение почты, сброс пароля) с временем жизни. */
+  putToken(key: string, value: string, ttlSeconds: number): Promise<void>;
+  /** Читает и сразу стирает: ссылкой из письма можно воспользоваться один раз. */
+  takeToken(key: string): Promise<string | null>;
   getProfile(userId: string): Promise<string | null>;
   putProfile(userId: string, json: string): Promise<void>;
 }
@@ -89,6 +103,9 @@ function redisStore(url: string, token: string): AuthStore {
       if (claimed !== "OK") throw new Error("EMAIL_TAKEN");
       await call(["SET", `user:${user.id}`, JSON.stringify(user)]);
     },
+    async updateUser(user) {
+      await call(["SET", `user:${user.id}`, JSON.stringify(user)]);
+    },
     async putSession(token, session) {
       const ttl = Math.max(60, Math.floor((session.expiresAt - Date.now()) / 1000));
       await call(["SET", `session:${token}`, JSON.stringify(session), "EX", ttl]);
@@ -96,6 +113,20 @@ function redisStore(url: string, token: string): AuthStore {
     getSession: (token) => getJson<SessionRecord>(`session:${token}`),
     async deleteSession(token) {
       await call(["DEL", `session:${token}`]);
+    },
+    async putToken(key, value, ttlSeconds) {
+      await call(["SET", `tok:${key}`, value, "EX", Math.max(60, Math.floor(ttlSeconds))]);
+    },
+    async takeToken(key) {
+      try {
+        return await call<string>(["GETDEL", `tok:${key}`]);
+      } catch {
+        // GETDEL есть не в каждом шлюзе. Тогда читаем и стираем двумя командами:
+        // окно на повторное использование ничтожно, а ссылка всё равно одноразовая.
+        const value = await call<string>(["GET", `tok:${key}`]);
+        await call(["DEL", `tok:${key}`]);
+        return value;
+      }
     },
     getProfile: (userId) => call<string>(["GET", `profile:${userId}`]),
     async putProfile(userId, json) {
@@ -109,9 +140,10 @@ type FileShape = {
   emails: Record<string, string>;
   sessions: Record<string, SessionRecord>;
   profiles: Record<string, string>;
+  tokens: Record<string, { value: string; expiresAt: number }>;
 };
 
-const EMPTY: FileShape = { users: {}, emails: {}, sessions: {}, profiles: {} };
+const EMPTY: FileShape = { users: {}, emails: {}, sessions: {}, profiles: {}, tokens: {} };
 
 /**
  * Хранилище для разработки и самостоятельного запуска. На Vercel не годится:
@@ -146,6 +178,9 @@ function fileStore(path: string): AuthStore {
     for (const [token, s] of Object.entries(data.sessions)) {
       if (s.expiresAt < now) delete data.sessions[token];
     }
+    for (const [key, t] of Object.entries(data.tokens ?? {})) {
+      if (t.expiresAt < now) delete data.tokens[key];
+    }
   };
 
   return {
@@ -166,6 +201,11 @@ function fileStore(path: string): AuthStore {
         data.emails[user.email] = user.id;
         data.users[user.id] = user;
       }),
+    updateUser: (user) =>
+      mutate((data) => {
+        data.users[user.id] = user;
+        data.emails[user.email] = user.id;
+      }),
     putSession: (token, session) =>
       mutate((data) => {
         prune(data);
@@ -179,6 +219,17 @@ function fileStore(path: string): AuthStore {
     deleteSession: (token) =>
       mutate((data) => {
         delete data.sessions[token];
+      }),
+    putToken: (key, value, ttlSeconds) =>
+      mutate((data) => {
+        prune(data);
+        data.tokens[key] = { value, expiresAt: Date.now() + Math.max(60, ttlSeconds) * 1000 };
+      }),
+    takeToken: (key) =>
+      mutate((data) => {
+        const entry = data.tokens[key];
+        delete data.tokens[key];
+        return entry && entry.expiresAt > Date.now() ? entry.value : null;
       }),
     async getProfile(userId) {
       return (await read()).profiles[userId] ?? null;
