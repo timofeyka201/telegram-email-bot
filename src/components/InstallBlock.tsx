@@ -114,16 +114,25 @@ export default function InstallBlock() {
         {(way === "yandex-android" || way === "menu-android") && (
           <>
             {howTo && (
-              <Steps>
-                <li>
-                  Откройте меню <MenuDots /> в {browser}.
-                </li>
-                <li>
-                  Выберите «Установить приложение»
-                  {way === "yandex-android" ? " или «Добавить на главный экран»" : ""}.
-                </li>
-                <li>Подтвердите — ярлык появится рядом с остальными приложениями.</li>
-              </Steps>
+              <>
+                <Steps>
+                  <li>
+                    Откройте меню <MenuDots /> в {browser}.
+                  </li>
+                  <li>
+                    Выберите «Установить приложение»
+                    {way === "yandex-android" ? " или «Добавить на главный экран»" : ""}.
+                  </li>
+                  <li>Подтвердите — ярлык появится рядом с остальными приложениями.</li>
+                </Steps>
+                {way === "yandex-android" && (
+                  <p className="mt-2.5 text-[12px] leading-snug text-[var(--color-muted)]">
+                    Если такого пункта в меню нет или ярлык открывается обратно с адресной строкой —
+                    Яндекс.Браузер этой версии ставить приложения не умеет. Откройте сайт в Chrome
+                    или Samsung Internet и повторите: приложение будет то же самое.
+                  </p>
+                )}
+              </>
             )}
             <button
               type="button"
@@ -135,6 +144,12 @@ export default function InstallBlock() {
             </button>
           </>
         )}
+        <a
+          href="/pwa-check"
+          className="mt-3 block text-center text-[12px] font-semibold text-[var(--color-muted)] underline-offset-2 hover:underline"
+        >
+          Не получается? Проверить, что мешает
+        </a>
       </div>
     </>
   );
