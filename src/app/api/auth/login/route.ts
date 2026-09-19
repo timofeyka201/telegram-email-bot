@@ -23,8 +23,17 @@ export async function POST(req: Request) {
   const password = String(body.password ?? "");
 
   const store = authStore();
-  const id = email ? await store.userIdByEmail(email) : null;
-  const user = id ? await store.getUser(id) : null;
+  let user;
+  try {
+    const id = email ? await store.userIdByEmail(email) : null;
+    user = id ? await store.getUser(id) : null;
+  } catch (e) {
+    console.error("Вход: хранилище недоступно —", e);
+    return NextResponse.json(
+      { error: "Не удалось связаться с хранилищем учётных записей." },
+      { status: 503 },
+    );
+  }
 
   // Один и тот же ответ на «нет такой почты» и «неверный пароль»:
   // иначе форма превращается в проверку, кто здесь зарегистрирован.

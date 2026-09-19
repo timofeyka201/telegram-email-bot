@@ -14,6 +14,8 @@ export type SessionRecord = { userId: string; expiresAt: number };
 export interface AuthStore {
   readonly kind: "redis" | "file";
   readonly durable: boolean;
+  /** Проверка связи: пишет, читает и стирает пробный ключ. Бросает с внятным текстом. */
+  check(): Promise<void>;
   userIdByEmail(email: string): Promise<string | null>;
   getUser(id: string): Promise<UserRecord | null>;
   createUser(user: UserRecord): Promise<void>;
@@ -25,20 +27,36 @@ export interface AuthStore {
 }
 
 // ------------------------------------------------------------------- Redis
+/** Текст ошибки важнее её кода: по нему человек чинит настройку, не залезая в исходники. */
+function explainStatus(status: number, body: string): string {
+  if (status === 401 || status === 403) return "токен не подошёл (AUTH_REDIS_TOKEN)";
+  if (status === 404) return "по этому адресу ничего нет — проверьте AUTH_REDIS_URL";
+  if (status === 429) return "исчерпан лимит запросов к базе";
+  if (status >= 500) return "база временно недоступна";
+  return body.slice(0, 200) || `код ответа ${status}`;
+}
+
 /**
  * Хранилище для продакшена. Совместимо с Upstash и любым Redis с REST-шлюзом:
  * команды отправляются массивом, ответ приходит в поле result.
  */
 function redisStore(url: string, token: string): AuthStore {
   const call = async <T>(command: (string | number)[]): Promise<T | null> => {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(command),
-      cache: "no-store",
-    });
-    if (!res.ok) throw new Error(`Хранилище ответило ${res.status}`);
-    const json = (await res.json()) as { result?: T; error?: string };
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(command),
+        cache: "no-store",
+      });
+    } catch (e) {
+      // Сюда попадают опечатка в домене, отсутствие сети и обрыв соединения.
+      throw new Error(`не удалось связаться с базой: ${e instanceof Error ? e.message : "сеть недоступна"}`);
+    }
+    if (!res.ok) throw new Error(explainStatus(res.status, await res.text().catch(() => "")));
+    const json = (await res.json().catch(() => null)) as { result?: T; error?: string } | null;
+    if (!json) throw new Error("база ответила не в формате REST-шлюза — похоже, адрес ведёт не туда");
     if (json.error) throw new Error(json.error);
     return json.result ?? null;
   };
@@ -56,6 +74,13 @@ function redisStore(url: string, token: string): AuthStore {
   return {
     kind: "redis",
     durable: true,
+    async check() {
+      const key = `probe:${Date.now()}`;
+      await call(["SET", key, "ok", "EX", 60]);
+      const back = await call<string>(["GET", key]);
+      await call(["DEL", key]);
+      if (back !== "ok") throw new Error("база приняла запись, но вернула не то, что записали");
+    },
     userIdByEmail: (email) => call<string>(["GET", `user:email:${email}`]),
     getUser: (id) => getJson<UserRecord>(`user:${id}`),
     async createUser(user) {
@@ -78,7 +103,6 @@ function redisStore(url: string, token: string): AuthStore {
     },
   };
 }
-
 // -------------------------------------------------------------------- файл
 type FileShape = {
   users: Record<string, UserRecord>;
@@ -127,6 +151,9 @@ function fileStore(path: string): AuthStore {
   return {
     kind: "file",
     durable: false,
+    async check() {
+      await mutate((data) => data);
+    },
     async userIdByEmail(email) {
       return (await read()).emails[email] ?? null;
     },
@@ -163,23 +190,91 @@ function fileStore(path: string): AuthStore {
   };
 }
 
+
 // ------------------------------------------------------------------- выбор
+/** Переменные окружения часто приезжают с кавычками или переводом строки внутри. */
+const env = (name: string): string | undefined =>
+  process.env[name]?.trim().replace(/^["']|["']$/g, "").trim() || undefined;
+
+type Config = { url: string; token: string; problem?: undefined } | { url?: undefined; token?: undefined; problem: string | null };
+
+/**
+ * Разбор настроек хранилища. problem — то, что человек может починить руками;
+ * null означает, что хранилище просто не настраивали.
+ */
+function readConfig(): Config {
+  const url = env("AUTH_REDIS_URL") ?? env("UPSTASH_REDIS_REST_URL");
+  const token = env("AUTH_REDIS_TOKEN") ?? env("UPSTASH_REDIS_REST_TOKEN");
+
+  if (!url && !token) return { problem: null };
+  if (!url) return { problem: "токен задан, а адреса нет — добавьте AUTH_REDIS_URL" };
+  if (!token) return { problem: "адрес задан, а токена нет — добавьте AUTH_REDIS_TOKEN" };
+  if (/^rediss?:\/\//i.test(url)) {
+    return {
+      problem:
+        "в AUTH_REDIS_URL попал адрес для TCP-подключения (redis://…). Нужен адрес из блока «REST API», он начинается с https://",
+    };
+  }
+  if (!/^https?:\/\//i.test(url)) {
+    return { problem: `AUTH_REDIS_URL должен начинаться с https://, а там «${url.slice(0, 40)}»` };
+  }
+  return { url: url.replace(/\/+$/, ""), token };
+}
+
 let cached: AuthStore | null = null;
 
 export function authStore(): AuthStore {
   if (cached) return cached;
-  const url = process.env.AUTH_REDIS_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.AUTH_REDIS_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-  cached = url && token ? redisStore(url, token) : fileStore(process.env.AUTH_FILE || ".data/auth.json");
+  const config = readConfig();
+  cached = config.url
+    ? redisStore(config.url, config.token)
+    : fileStore(process.env.AUTH_FILE || ".data/auth.json");
   return cached;
 }
 
+const onServerless = () => !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+
 /** Регистрация без надёжного хранилища — обещание, которое приложение не сдержит. */
 export function storageWarning(): string | null {
-  const store = authStore();
-  if (store.durable) return null;
-  const onServerless = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
-  return onServerless
+  if (authStore().durable) return null;
+  const { problem } = readConfig();
+  if (problem) return `Хранилище настроено с ошибкой: ${problem}. Пока учётные записи пишутся в файл.`;
+  return onServerless()
     ? "Учётные записи сейчас пишутся в файл, а на этом хостинге файловая система эфемерная: регистрации будут пропадать. Задайте AUTH_REDIS_URL и AUTH_REDIS_TOKEN."
     : null;
+}
+
+export type StorageReport = {
+  kind: "redis" | "file";
+  durable: boolean;
+  reachable: boolean;
+  detail: string;
+};
+
+/** Живая проверка хранилища: настройки могут быть на месте, а база — не отвечать. */
+export async function diagnoseStorage(): Promise<StorageReport> {
+  const store = authStore();
+  const { problem } = readConfig();
+  if (problem) return { kind: store.kind, durable: false, reachable: false, detail: problem };
+
+  try {
+    await store.check();
+  } catch (e) {
+    return {
+      kind: store.kind,
+      durable: store.durable,
+      reachable: false,
+      detail: e instanceof Error ? e.message : "неизвестная ошибка",
+    };
+  }
+
+  if (store.durable) return { kind: "redis", durable: true, reachable: true, detail: "Запись и чтение работают." };
+  return {
+    kind: "file",
+    durable: false,
+    reachable: true,
+    detail: onServerless()
+      ? "Пишем в файл на эфемерном диске — регистрации будут пропадать. Задайте AUTH_REDIS_URL и AUTH_REDIS_TOKEN."
+      : "Пишем в файл .data/auth.json. Для локального запуска это нормально.",
+  };
 }

@@ -27,8 +27,16 @@ export async function POST(req: Request) {
   if (problem) return NextResponse.json({ error: problem }, { status: 400 });
 
   const store = authStore();
-  if (await store.userIdByEmail(email)) {
-    return NextResponse.json({ error: "Такая почта уже зарегистрирована" }, { status: 409 });
+  try {
+    if (await store.userIdByEmail(email)) {
+      return NextResponse.json({ error: "Такая почта уже зарегистрирована" }, { status: 409 });
+    }
+  } catch (e) {
+    console.error("Регистрация: хранилище недоступно —", e);
+    return NextResponse.json(
+      { error: "Не удалось связаться с хранилищем учётных записей." },
+      { status: 503 },
+    );
   }
 
   const user = {
@@ -47,7 +55,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Такая почта уже зарегистрирована" }, { status: 409 });
     }
     noteFailure(key);
-    return NextResponse.json({ error: "Не удалось сохранить учётную запись" }, { status: 503 });
+    // Без этой строки причина теряется, и в логах остаётся только «503».
+    console.error("Регистрация: хранилище недоступно —", e);
+    return NextResponse.json(
+      { error: "Не удалось сохранить учётную запись: хранилище недоступно." },
+      { status: 503 },
+    );
   }
 
   await startSession(user.id);
