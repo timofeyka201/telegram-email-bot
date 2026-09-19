@@ -192,9 +192,28 @@ function fileStore(path: string): AuthStore {
 
 
 // ------------------------------------------------------------------- выбор
-/** Переменные окружения часто приезжают с кавычками или переводом строки внутри. */
-const env = (name: string): string | undefined =>
-  process.env[name]?.trim().replace(/^["']|["']$/g, "").trim() || undefined;
+/**
+ * Upstash показывает ключи готовой строкой для .env, и её часто копируют целиком —
+ * вместе с именем переменной и кавычками. Отрезаем и то, и другое.
+ */
+const clean = (raw: string): string =>
+  raw
+    .trim()
+    .replace(/^[A-Za-z_][A-Za-z0-9_]*\s*=\s*/, "")
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .trim();
+
+/** Значение переменной и имя, под которым его нашли, — чтобы ошибка указывала на нужную строку. */
+type Found = { name: string; value: string } | null;
+
+function pick(...names: string[]): Found {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value && clean(value)) return { name, value: clean(value) };
+  }
+  return null;
+}
 
 type Config = { url: string; token: string; problem?: undefined } | { url?: undefined; token?: undefined; problem: string | null };
 
@@ -203,22 +222,21 @@ type Config = { url: string; token: string; problem?: undefined } | { url?: unde
  * null означает, что хранилище просто не настраивали.
  */
 function readConfig(): Config {
-  const url = env("AUTH_REDIS_URL") ?? env("UPSTASH_REDIS_REST_URL");
-  const token = env("AUTH_REDIS_TOKEN") ?? env("UPSTASH_REDIS_REST_TOKEN");
+  const url = pick("AUTH_REDIS_URL", "UPSTASH_REDIS_REST_URL");
+  const token = pick("AUTH_REDIS_TOKEN", "UPSTASH_REDIS_REST_TOKEN");
 
   if (!url && !token) return { problem: null };
   if (!url) return { problem: "токен задан, а адреса нет — добавьте AUTH_REDIS_URL" };
   if (!token) return { problem: "адрес задан, а токена нет — добавьте AUTH_REDIS_TOKEN" };
-  if (/^rediss?:\/\//i.test(url)) {
+  if (/^rediss?:\/\//i.test(url.value)) {
     return {
-      problem:
-        "в AUTH_REDIS_URL попал адрес для TCP-подключения (redis://…). Нужен адрес из блока «REST API», он начинается с https://",
+      problem: `в ${url.name} попал адрес для TCP-подключения (redis://…). Нужен адрес из блока «REST API», он начинается с https://`,
     };
   }
-  if (!/^https?:\/\//i.test(url)) {
-    return { problem: `AUTH_REDIS_URL должен начинаться с https://, а там «${url.slice(0, 40)}»` };
+  if (!/^https?:\/\//i.test(url.value)) {
+    return { problem: `${url.name} должен начинаться с https://, а там «${url.value.slice(0, 40)}»` };
   }
-  return { url: url.replace(/\/+$/, ""), token };
+  return { url: url.value.replace(/\/+$/, ""), token: token.value };
 }
 
 const onServerless = () => !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
