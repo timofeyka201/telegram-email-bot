@@ -1,9 +1,9 @@
 "use client";
 
 import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Img from "./Img";
-import { IconFlame, IconInfo, IconStar } from "./Icons";
+import { IconChevron, IconFlame, IconInfo, IconStar } from "./Icons";
 import { categoryLabel } from "@/lib/categories";
 import type { Product } from "@/lib/types";
 import type { Decision } from "@/lib/store";
@@ -12,6 +12,10 @@ import { compact, formatNative, formatRub, needsConversion, plural } from "@/lib
 const SWIPE_DISTANCE = 110;
 const SWIPE_VELOCITY = 520;
 const SUPER_DISTANCE = 130;
+/** Палец никогда не стоит на месте: сдвиг меньше этого считаем тапом, а не протяжкой. */
+const TAP_SLOP = 12;
+/** Долгое удержание — не тап: человек передумал или просто держит карточку. */
+const TAP_TIME = 600;
 
 type Props = {
   product: Product;
@@ -40,6 +44,10 @@ export default function SwipeCard({ product, rates, depth, showHint, onDecide, o
   const images = product.images.length ? product.images : [""];
   const interactive = depth === 0;
 
+  const cardRef = useRef<HTMLDivElement>(null);
+  /** Откуда и когда начался жест. null — значит начало до нас не дошло. */
+  const press = useRef<{ x: number; y: number; at: number } | null>(null);
+
   function handleDragEnd(_: unknown, info: PanInfo) {
     const { offset, velocity } = info;
     if (offset.y < -SUPER_DISTANCE && Math.abs(offset.x) < 100) return onDecide("super");
@@ -49,16 +57,29 @@ export default function SwipeCard({ product, rates, depth, showHint, onDecide, o
     y.set(0);
   }
 
-  /** Тап по краям листает фото, тап по центру открывает карточку. */
-  function handleTap(event: MouseEvent | TouchEvent | PointerEvent) {
-    const target = event.currentTarget as HTMLElement | null;
-    if (!target) return onOpen();
-    const rect = target.getBoundingClientRect();
-    const point = "clientX" in event ? event.clientX : (event as TouchEvent).changedTouches?.[0]?.clientX;
-    if (point === undefined) return onOpen();
-    const ratio = (point - rect.left) / rect.width;
-    if (images.length > 1 && ratio < 0.28) setImgIndex((i) => (i - 1 + images.length) % images.length);
-    else if (images.length > 1 && ratio > 0.72) setImgIndex((i) => (i + 1) % images.length);
+  const prevImage = () => setImgIndex((i) => (i - 1 + images.length) % images.length);
+  const nextImage = () => setImgIndex((i) => (i + 1) % images.length);
+
+  /**
+   * Тап распознаём сами, а не через onTap у Framer Motion: тот приходит с
+   * обработчика на окне, где currentTarget уже пуст — размеры карточки из него
+   * не достать, и любой тап превращался в «открыть карточку». Заодно здесь
+   * видно, было движение или нет, поэтому протяжка больше не открывает товар.
+   */
+  function handlePointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    const start = press.current;
+    press.current = null;
+    if (!interactive || !start) return;
+
+    const moved = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+    if (moved > TAP_SLOP || Date.now() - start.at > TAP_TIME) return;
+
+    const rect = cardRef.current?.getBoundingClientRect();
+    if (!rect || !rect.width) return onOpen();
+
+    const ratio = (start.x - rect.left) / rect.width;
+    if (images.length > 1 && ratio < 0.28) prevImage();
+    else if (images.length > 1 && ratio > 0.72) nextImage();
     else onOpen();
   }
 
@@ -100,9 +121,18 @@ export default function SwipeCard({ product, rates, depth, showHint, onDecide, o
       dragElastic={0.7}
       dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
       onDragEnd={handleDragEnd}
-      onTap={interactive ? (e) => handleTap(e) : undefined}
+      onPointerDown={(e) => {
+        press.current = { x: e.clientX, y: e.clientY, at: Date.now() };
+      }}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={() => {
+        press.current = null;
+      }}
     >
-      <div className="card-shadow relative h-full w-full overflow-hidden rounded-[var(--radius-card)] bg-[var(--color-surface)]">
+      <div
+        ref={cardRef}
+        className="card-shadow relative h-full w-full overflow-hidden rounded-[var(--radius-card)] bg-[var(--color-surface)]"
+      >
         <Img
           src={images[imgIndex]}
           alt={product.title}
@@ -121,6 +151,36 @@ export default function SwipeCard({ product, rates, depth, showHint, onDecide, o
               />
             ))}
           </div>
+        )}
+
+        {/* Стрелки листания. Тапом по краям фото листалось и раньше, но догадаться
+            об этом было нельзя — а горизонтальную протяжку занимает свайп карточки. */}
+        {interactive && images.length > 1 && (
+          <>
+            {[
+              { side: "left", label: "Предыдущее фото", act: prevImage, rotate: "rotate-180" },
+              { side: "right", label: "Следующее фото", act: nextImage, rotate: "" },
+            ].map(({ side, label, act, rotate }) => (
+              <button
+                key={side}
+                type="button"
+                aria-label={label}
+                // Кнопка лежит на перетаскиваемой карточке: не отдаём ей жест,
+                // иначе нажатие посчитается началом свайпа.
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerUp={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  act();
+                }}
+                className={`absolute top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm transition-colors active:bg-black/55 ${
+                  side === "left" ? "left-2" : "right-2"
+                }`}
+              >
+                <IconChevron className={`h-5 w-5 ${rotate}`} />
+              </button>
+            ))}
+          </>
         )}
 
         {/* Зоны тапа не видны сами по себе — подсказываем их на первых карточках */}
