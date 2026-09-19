@@ -20,7 +20,7 @@ export default function BottomNav() {
   const counts: Record<string, number> = { "/likes": likes, "/cart": cart };
 
   return (
-    <nav className="sticky bottom-0 z-40 border-t border-[var(--color-line)] bg-[var(--color-surface)]/94 backdrop-blur-md">
+    <nav className="safe-bottom sticky bottom-0 z-40 border-t border-[var(--color-line)] bg-[var(--color-surface)]/94 backdrop-blur-md">
       <div className="mx-auto flex max-w-[480px] items-stretch">
         {items.map(({ href, label, Icon }) => {
           const active = pathname === href;

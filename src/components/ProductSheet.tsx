@@ -103,7 +103,9 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
             type="button"
             onClick={onClose}
             aria-label="Закрыть"
-            className="absolute left-3 top-3 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur"
+            // Карточка открывается на весь экран: без отступа под чёлку кнопка
+            // «закрыть» оказывается под часами.
+            className="absolute left-3 top-[calc(12px+env(safe-area-inset-top))] z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur"
           >
             <IconX className="h-5 w-5" />
           </button>

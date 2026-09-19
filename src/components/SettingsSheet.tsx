@@ -5,6 +5,7 @@ import Sheet from "./Sheet";
 import { Mark } from "./Brand";
 import { IconAuto, IconChevron, IconExit, IconMoon, IconRuler, IconSun, IconTrash, IconUser } from "./Icons";
 import AuthSheet from "./AuthSheet";
+import InstallBlock from "./InstallBlock";
 import SizeProfileSheet from "./SizeProfileSheet";
 import { toast } from "./Toast";
 import { needsConversion, symbolOf } from "@/lib/money";
@@ -132,6 +133,8 @@ export default function SettingsSheet({
           <IconChevron className="h-5 w-5 shrink-0 text-[var(--color-muted)]" />
         </button>
       )}
+
+      <InstallBlock />
 
       <p className="mb-2 mt-6 text-[12px] font-bold uppercase tracking-wider text-[var(--color-muted)]">Оформление</p>
       <div className="grid grid-cols-3 gap-2">

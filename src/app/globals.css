@@ -152,6 +152,35 @@ body {
   overflow-x: clip;
 }
 
+/* --------------------------------------------- запуск с домашнего экрана */
+/* Без адресной строки страница становится единственным окном: оттянуть её
+   вниз «на обновление» или увести вбок нечем, и резиновый отскок только
+   выдаёт, что внутри браузер. */
+html {
+  overscroll-behavior-y: none;
+}
+
+body {
+  overscroll-behavior: none;
+  /* Двойной тап масштабирует страницу и мешает быстрым свайпам. */
+  touch-action: manipulation;
+}
+
+/* Безопасные зоны. Значения не равны нулю только там, где есть чёлка или
+   полоса жестов, поэтому в браузере на ПК ничего не меняется. */
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.safe-sides {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
 @media (min-width: 640px) {
   body {
     background:

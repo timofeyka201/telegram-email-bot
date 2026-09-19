@@ -63,7 +63,7 @@ export default function TopBar({
   const filterCount = active.length + extraFilters;
 
   return (
-    <header className="sticky top-0 z-30 min-w-0 border-b border-[var(--color-line)] bg-[var(--color-surface)]/92 backdrop-blur-md">
+    <header className="safe-top sticky top-0 z-30 min-w-0 border-b border-[var(--color-line)] bg-[var(--color-surface)]/92 backdrop-blur-md">
       <div className="flex items-center gap-2 px-4 pb-1.5 pt-2.5">
         <Logo />
 

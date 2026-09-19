@@ -53,7 +53,7 @@ export default function CartPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-[var(--color-line)] bg-[var(--color-surface)]/92 px-4 py-3 backdrop-blur-md">
+      <header className="safe-top sticky top-0 z-30 flex items-center justify-between border-b border-[var(--color-line)] bg-[var(--color-surface)]/92 px-4 py-3 backdrop-blur-md">
         <h1 className="font-display text-[20px] font-bold">Корзина</h1>
         {cart.length > 0 && (
           <button type="button" onClick={clearCart} className="text-[13px] font-semibold text-[var(--color-muted)]">

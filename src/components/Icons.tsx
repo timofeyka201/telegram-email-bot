@@ -186,3 +186,12 @@ export const IconExit = ({ className }: P) => (
     <path d="M10 8.5 6 12l4 3.5M6 12h8" />
   </svg>
 );
+
+/** Кнопка «Поделиться» в Safari — по ней на iOS добавляют на домашний экран. */
+export const IconShare = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M12 3v12" />
+    <path d="m8 7 4-4 4 4" />
+    <path d="M5 13v6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6" />
+  </svg>
+);

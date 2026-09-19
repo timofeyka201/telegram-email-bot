@@ -60,7 +60,7 @@ export default function LikesPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <header className="sticky top-0 z-30 min-w-0 border-b border-[var(--color-line)] bg-[var(--color-surface)]/92 backdrop-blur-md">
+      <header className="safe-top sticky top-0 z-30 min-w-0 border-b border-[var(--color-line)] bg-[var(--color-surface)]/92 backdrop-blur-md">
         <div className="flex items-baseline justify-between px-4 pb-2 pt-3">
           <h1 className="font-display text-[20px] font-bold">Избранное</h1>
           <span className="tnum text-[13px] text-[var(--color-muted)]">

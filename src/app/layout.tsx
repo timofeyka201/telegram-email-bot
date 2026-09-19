@@ -3,13 +3,23 @@ import "./globals.css";
 import BottomNav from "@/components/BottomNav";
 import ToastHost from "@/components/Toast";
 import SyncAgent from "@/components/SyncAgent";
+import ServiceWorker from "@/components/ServiceWorker";
 
 export const metadata: Metadata = {
   title: "Swiper — свайп-витрина товаров",
   description:
     "Листайте товары как ленту знакомств: вправо — нравится, влево — мимо, вверх — сразу в корзину. Карточки с фото, характеристиками и отзывами, избранное и корзина.",
   applicationName: "Swiper",
+  // capable убирает интерфейс Safari, когда приложение открыто с домашнего
+  // экрана. statusBarStyle оставлен default: он не даёт содержимому уехать
+  // под часы, в отличие от black-translucent.
   appleWebApp: { capable: true, title: "Swiper", statusBarStyle: "default" },
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }, { url: "/icons/icon-192.png", sizes: "192x192" }],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  // Телефоны любят превращать цены и артикулы в ссылки на звонок.
+  formatDetection: { telephone: false },
   openGraph: {
     title: "Swiper — свайп-витрина товаров",
     description: "Вправо — нравится, влево — мимо, вверх — в корзину.",
@@ -59,6 +69,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </div>
         <ToastHost />
         <SyncAgent />
+        <ServiceWorker />
       </body>
     </html>
   );
