@@ -15,6 +15,9 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/?source=pwa",
     scope: "/",
     display: "standalone",
+    // Браузеры, читающие display_override, берут режим отсюда, а display
+    // оставляют как запасной вариант для тех, кто это поле не знает.
+    display_override: ["standalone", "minimal-ui"],
     orientation: "portrait",
     background_color: "#f5f4fa",
     theme_color: "#5b3df5",

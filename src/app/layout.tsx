@@ -20,6 +20,11 @@ export const metadata: Metadata = {
   },
   // Телефоны любят превращать цены и артикулы в ссылки на звонок.
   formatDetection: { telephone: false },
+  other: {
+    // Next отдаёт только стандартный mobile-web-app-capable, а Safari до iOS 16.4
+    // понимает лишь этот, устаревший. Без него ярлык открывается вкладкой.
+    "apple-mobile-web-app-capable": "yes",
+  },
   openGraph: {
     title: "Swiper — свайп-витрина товаров",
     description: "Вправо — нравится, влево — мимо, вверх — в корзину.",
