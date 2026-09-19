@@ -221,18 +221,22 @@ function readConfig(): Config {
   return { url: url.replace(/\/+$/, ""), token };
 }
 
+const onServerless = () => !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+
+/**
+ * На Vercel и в Lambda весь диск смонтирован только для чтения, кроме /tmp:
+ * запись в .data/ там не теряется со временем, а падает на первой же попытке.
+ */
+const filePath = () => process.env.AUTH_FILE || (onServerless() ? "/tmp/swiper-auth.json" : ".data/auth.json");
+
 let cached: AuthStore | null = null;
 
 export function authStore(): AuthStore {
   if (cached) return cached;
   const config = readConfig();
-  cached = config.url
-    ? redisStore(config.url, config.token)
-    : fileStore(process.env.AUTH_FILE || ".data/auth.json");
+  cached = config.url ? redisStore(config.url, config.token) : fileStore(filePath());
   return cached;
 }
-
-const onServerless = () => !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 
 /** Регистрация без надёжного хранилища — обещание, которое приложение не сдержит. */
 export function storageWarning(): string | null {
@@ -260,11 +264,15 @@ export async function diagnoseStorage(): Promise<StorageReport> {
   try {
     await store.check();
   } catch (e) {
+    const cause = e instanceof Error ? e.message : "неизвестная ошибка";
     return {
       kind: store.kind,
       durable: store.durable,
       reachable: false,
-      detail: e instanceof Error ? e.message : "неизвестная ошибка",
+      detail:
+        store.kind === "file"
+          ? `Файл ${filePath()} не пишется: ${cause}. Задайте AUTH_REDIS_URL и AUTH_REDIS_TOKEN.`
+          : cause,
     };
   }
 
@@ -274,7 +282,7 @@ export async function diagnoseStorage(): Promise<StorageReport> {
     durable: false,
     reachable: true,
     detail: onServerless()
-      ? "Пишем в файл на эфемерном диске — регистрации будут пропадать. Задайте AUTH_REDIS_URL и AUTH_REDIS_TOKEN."
-      : "Пишем в файл .data/auth.json. Для локального запуска это нормально.",
+      ? `Пишем в ${filePath()} на эфемерном диске — регистрации будут пропадать. Задайте AUTH_REDIS_URL и AUTH_REDIS_TOKEN.`
+      : `Пишем в файл ${filePath()}. Для локального запуска это нормально.`,
   };
 }
