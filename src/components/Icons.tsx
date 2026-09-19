@@ -172,3 +172,17 @@ export const IconRuler = ({ className }: P) => (
     <path d="M7 8v3M11 8v4M15 8v3M19 8v4" />
   </svg>
 );
+
+export const IconUser = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="1.9" strokeLinecap="round" aria-hidden>
+    <circle cx="12" cy="8.5" r="3.7" />
+    <path d="M4.8 20c.6-3.6 3.6-5.6 7.2-5.6s6.6 2 7.2 5.6" />
+  </svg>
+);
+
+export const IconExit = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M14 4.5h3.5A1.5 1.5 0 0 1 19 6v12a1.5 1.5 0 0 1-1.5 1.5H14" />
+    <path d="M10 8.5 6 12l4 3.5M6 12h8" />
+  </svg>
+);

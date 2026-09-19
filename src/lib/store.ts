@@ -24,6 +24,22 @@ export type Stats = {
 
 /** Слежение за ценой: что стоил товар в момент, когда его отложили. */
 export type PriceWatch = { price: number; currency: string; since: string };
+export type Account = { id: string; email: string; name?: string; createdAt: string };
+
+/** Что уезжает в облако при входе: всё личное, но не служебное. */
+export type SyncedProfile = {
+  liked: Product[];
+  wishlist: Product[];
+  cart: CartItem[];
+  taste: Taste;
+  sizes: SizeProfile;
+  watch: Record<string, PriceWatch>;
+  rejected: string[];
+  stats: Stats;
+  rates: Record<string, number>;
+  tasted: boolean;
+  updatedAt: number;
+};
 export type PriceDrop = { id: string; title: string; image?: string; was: number; now: number; currency: string };
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -66,11 +82,17 @@ type State = {
   dropsSeen: boolean;
   dislikesSinceAsk: number;
   pendingReason: Product | null;
+  account: Account | null;
+  /** когда личные данные менялись последний раз — для разрешения конфликтов */
+  updatedAt: number;
   provider: string | null;
   providerLabel: string;
   cursor: string | null;
   seed: number;
 
+  setAccount: (account: Account | null) => void;
+  exportProfile: () => SyncedProfile;
+  importProfile: (profile: SyncedProfile) => void;
   startFeed: (opts: { provider: string | null; query: string }) => void;
   appendPage: (products: Product[], cursor: string, provider: string, providerLabel: string) => void;
   decide: (decision: Decision) => Product | undefined;
@@ -119,10 +141,56 @@ export const useStore = create<State>()(
       dropsSeen: true,
       dislikesSinceAsk: 0,
       pendingReason: null,
+      account: null,
+      updatedAt: 0,
       provider: null,
       providerLabel: "",
       cursor: null,
       seed: Math.floor(Math.random() * 1e9),
+
+      setAccount: (account) => set({ account }),
+
+      exportProfile: () => {
+        const s = get();
+        return {
+          liked: s.liked,
+          wishlist: s.wishlist,
+          cart: s.cart,
+          taste: s.taste,
+          sizes: s.sizes,
+          watch: s.watch,
+          rejected: s.rejected,
+          stats: s.stats,
+          rates: s.rates,
+          tasted: s.tasted,
+          updatedAt: s.updatedAt,
+        };
+      },
+
+      /**
+       * Данные из облака заменяют локальные целиком. Слияние списков «по уму»
+       * выглядит заманчиво, но приводит к воскрешению удалённого, поэтому
+       * побеждает более свежая запись — решение принимается до вызова.
+       */
+      importProfile: (profile) =>
+        set({
+          liked: profile.liked ?? [],
+          wishlist: profile.wishlist ?? [],
+          cart: profile.cart ?? [],
+          taste: profile.taste ?? emptyTaste(),
+          sizes: profile.sizes ?? emptySizes(),
+          watch: profile.watch ?? {},
+          rejected: profile.rejected ?? [],
+          stats: profile.stats ?? emptyStats(),
+          rates: profile.rates ?? { ...DEFAULT_RATES },
+          tasted: profile.tasted ?? false,
+          updatedAt: profile.updatedAt ?? Date.now(),
+          // Лента пересобирается: чужие отказы и вкусы меняют выдачу.
+          deck: [],
+          index: 0,
+          cursor: null,
+          history: [],
+        }),
 
       startFeed: ({ provider, query }) =>
         set({ deck: [], index: 0, history: [], cursor: null, provider, query, seed: Math.floor(Math.random() * 1e9) }),
@@ -184,6 +252,7 @@ export const useStore = create<State>()(
         }
 
         set({
+          updatedAt: Date.now(),
           deck,
           index,
           liked,
@@ -224,38 +293,39 @@ export const useStore = create<State>()(
           };
         }),
 
-      unlike: (id) => set((s) => ({ liked: s.liked.filter((p) => p.id !== id) })),
+      unlike: (id) => set((s) => ({ liked: s.liked.filter((p) => p.id !== id), updatedAt: Date.now() })),
 
       like: (product) =>
         set((s) =>
           s.liked.some((p) => p.id === product.id)
             ? s
-            : { liked: [product, ...s.liked], watch: rememberPrice(s.watch, product) },
+            : { liked: [product, ...s.liked], watch: rememberPrice(s.watch, product), updatedAt: Date.now() },
         ),
 
       toggleWish: (product) =>
         set((s) => {
           const has = s.wishlist.some((p) => p.id === product.id);
           return has
-            ? { wishlist: s.wishlist.filter((p) => p.id !== product.id) }
-            : { wishlist: [product, ...s.wishlist], watch: rememberPrice(s.watch, product) };
+            ? { wishlist: s.wishlist.filter((p) => p.id !== product.id), updatedAt: Date.now() }
+            : { wishlist: [product, ...s.wishlist], watch: rememberPrice(s.watch, product), updatedAt: Date.now() };
         }),
 
       addToCart: (product, sku) =>
         set((s) => {
           if (s.cart.some((c) => c.product.id === product.id)) return s;
           const qty = product.minOrder && product.minOrder > 1 ? product.minOrder : 1;
-          return { cart: [{ product, qty, sku }, ...s.cart], watch: rememberPrice(s.watch, product) };
+          return { cart: [{ product, qty, sku }, ...s.cart], watch: rememberPrice(s.watch, product), updatedAt: Date.now() };
         }),
 
       setQty: (id, qty) =>
         set((s) => ({
           cart: s.cart.map((c) => (c.product.id === id ? { ...c, qty: Math.max(1, Math.min(9999, qty)) } : c)),
+          updatedAt: Date.now(),
         })),
 
-      removeFromCart: (id) => set((s) => ({ cart: s.cart.filter((c) => c.product.id !== id) })),
+      removeFromCart: (id) => set((s) => ({ cart: s.cart.filter((c) => c.product.id !== id), updatedAt: Date.now() })),
 
-      clearCart: () => set({ cart: [] }),
+      clearCart: () => set({ cart: [], updatedAt: Date.now() }),
 
       setRate: (currency, rate) => set((s) => ({ rates: { ...s.rates, [currency]: rate > 0 ? rate : 1 } })),
 
@@ -289,6 +359,7 @@ export const useStore = create<State>()(
       finishTaste: (picked, budget) =>
         set((s) => ({
           tasted: true,
+          updatedAt: Date.now(),
           taste: { ...s.taste, picked, budget },
           // Ответы теста должны сразу отразиться на ленте.
           deck: [],
@@ -302,10 +373,10 @@ export const useStore = create<State>()(
           const product = s.pendingReason;
           if (!product || !reason) return { pendingReason: null };
           const priceRub = toRub(product.price, product.currency, s.rates);
-          return { pendingReason: null, taste: learnReason(s.taste, product, reason, priceRub) };
+          return { pendingReason: null, taste: learnReason(s.taste, product, reason, priceRub), updatedAt: Date.now() };
         }),
 
-      setSizes: (sizes) => set({ sizes }),
+      setSizes: (sizes) => set({ sizes, updatedAt: Date.now() }),
 
       /** Сверяет текущие цены с запомненными и собирает список подешевевших. */
       applyPrices: (current) =>
@@ -391,6 +462,8 @@ export const useStore = create<State>()(
         watch: s.watch,
         // Счётчик обязан пережить перезагрузку, иначе «раз в 200» не накопится.
         dislikesSinceAsk: s.dislikesSinceAsk,
+        account: s.account,
+        updatedAt: s.updatedAt,
         provider: s.provider,
         providerLabel: s.providerLabel,
         cursor: s.cursor,

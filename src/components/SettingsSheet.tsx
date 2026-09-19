@@ -3,11 +3,13 @@
 import { useState } from "react";
 import Sheet from "./Sheet";
 import { Mark } from "./Brand";
-import { IconAuto, IconChevron, IconMoon, IconRuler, IconSun, IconTrash } from "./Icons";
+import { IconAuto, IconChevron, IconExit, IconMoon, IconRuler, IconSun, IconTrash, IconUser } from "./Icons";
+import AuthSheet from "./AuthSheet";
 import SizeProfileSheet from "./SizeProfileSheet";
 import { toast } from "./Toast";
 import { needsConversion, symbolOf } from "@/lib/money";
 import { hasSizes } from "@/lib/sizes";
+import { flushPush } from "@/lib/sync";
 import { useStore } from "@/lib/store";
 
 const THEMES = [
@@ -37,6 +39,9 @@ export default function SettingsSheet({
   const resetAll = useStore((s) => s.resetAll);
   const [confirmReset, setConfirmReset] = useState(false);
   const [sizesOpen, setSizesOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+  const account = useStore((s) => s.account);
+  const setAccount = useStore((s) => s.setAccount);
   const sizes = useStore((s) => s.sizes);
 
   const cart = useStore((s) => s.cart);
@@ -48,7 +53,54 @@ export default function SettingsSheet({
 
   return (
     <Sheet open={open} title="Настройки" onClose={onClose}>
-      <p className="mb-2 mt-1 text-[12px] font-bold uppercase tracking-wider text-[var(--color-muted)]">Оформление</p>
+      <p className="mb-2 mt-1 text-[12px] font-bold uppercase tracking-wider text-[var(--color-muted)]">Аккаунт</p>
+      {account ? (
+        <div className="soft-shadow flex items-center gap-3 rounded-2xl bg-[var(--color-surface)] px-4 py-3.5">
+          <span className="brand-gradient flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white">
+            <IconUser className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[14px] font-semibold">{account.name || account.email}</span>
+            <span className="block truncate text-[12px] text-[var(--color-muted)]">
+              {account.name ? account.email : "Избранное и корзина синхронизируются"}
+            </span>
+          </span>
+          <button
+            type="button"
+            aria-label="Выйти"
+            title="Выйти"
+            onClick={async () => {
+              // Локальные данные не трогаем: выход — не удаление.
+              await flushPush();
+              await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
+              setAccount(null);
+              toast("Вы вышли");
+            }}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-surface-2)] text-[var(--color-muted)]"
+          >
+            <IconExit className="h-5 w-5" />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAuthOpen(true)}
+          className="soft-shadow flex w-full items-center gap-3 rounded-2xl bg-[var(--color-surface)] px-4 py-3.5 text-left"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-soft)] text-[var(--color-brand)]">
+            <IconUser className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14px] font-semibold">Войти или зарегистрироваться</span>
+            <span className="block text-[12px] leading-snug text-[var(--color-muted)]">
+              Чтобы списки не остались в одном браузере
+            </span>
+          </span>
+          <IconChevron className="h-5 w-5 shrink-0 text-[var(--color-muted)]" />
+        </button>
+      )}
+
+      <p className="mb-2 mt-6 text-[12px] font-bold uppercase tracking-wider text-[var(--color-muted)]">Оформление</p>
       <div className="grid grid-cols-3 gap-2">
         {THEMES.map(({ id, label, Icon }) => {
           const on = theme === id;
@@ -172,6 +224,7 @@ export default function SettingsSheet({
       <p className="mb-2 mt-6 text-center text-[12px] text-[var(--color-muted)]">Swiper · витрина со свайпами</p>
 
       <SizeProfileSheet open={sizesOpen} onClose={() => setSizesOpen(false)} />
+      <AuthSheet open={authOpen} onClose={() => setAuthOpen(false)} />
     </Sheet>
   );
 }

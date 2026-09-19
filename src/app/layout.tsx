@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import BottomNav from "@/components/BottomNav";
 import ToastHost from "@/components/Toast";
+import SyncAgent from "@/components/SyncAgent";
 
 export const metadata: Metadata = {
   title: "Swiper — свайп-витрина товаров",
@@ -57,6 +58,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <BottomNav />
         </div>
         <ToastHost />
+        <SyncAgent />
       </body>
     </html>
   );
