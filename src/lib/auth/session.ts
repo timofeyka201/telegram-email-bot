@@ -5,6 +5,18 @@ import { authStore, type UserRecord } from "./store";
 export const SESSION_COOKIE = "swiper_session";
 const SESSION_DAYS = 30;
 
+/**
+ * Флаг Secure у куки должен совпадать с тем, как сайт реально отдаётся: по
+ * http браузер куку с этим флагом просто выбрасывает, и вход перестаёт
+ * работать молча. Поэтому смотрим на APP_URL — он и так описывает адрес
+ * приложения, — а не на режим сборки.
+ */
+function secureCookie(): boolean {
+  const url = process.env.APP_URL?.trim() || process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (url) return /^https:/i.test(url);
+  return process.env.NODE_ENV === "production";
+}
+
 export type PublicUser = {
   id: string;
   email: string;
@@ -34,7 +46,7 @@ export async function startSession(userId: string): Promise<void> {
   jar.set(SESSION_COOKIE, token, {
     httpOnly: true, // из JavaScript кука недоступна — это защита от XSS
     sameSite: "lax", // и от отправки куки со сторонних сайтов
-    secure: process.env.NODE_ENV === "production",
+    secure: secureCookie(),
     path: "/",
     expires: new Date(expiresAt),
   });
