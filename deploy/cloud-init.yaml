@@ -1,10 +1,6 @@
 #cloud-config
 # Первоначальная настройка сервера под Swiper (Ubuntu 24.04).
 #
-# ПЕРЕД ВСТАВКОЙ В ПАНЕЛЬ: подставьте свой публичный SSH-ключ в поле
-# ssh_authorized_keys ниже. Взять его на Windows:
-#     type $env:USERPROFILE\.ssh\swiper-real.pub
-#
 # Что делает: заводит пользователя swiper, ставит Node 22, git, nginx,
 # поднимает приёмник кода с автосборкой и службу приложения.
 # Выкладка потом — одной командой с ноутбука: git push server master
@@ -18,7 +14,7 @@ users:
     shell: /bin/bash
     sudo: ["ALL=(ALL) NOPASSWD:ALL"]
     ssh_authorized_keys:
-      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA_ВСТАВЬТЕ_СЮДА_СВОЙ_КЛЮЧ
+      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCPl7A+lkbcXL3ZJKwkkEFM25wvMa7pY+ysRc8aDA7ObfRcAJb2gs2UULZJOQoMtTvSP6lU7SNlZX7E8dkEA5UHan+wETg1nyDaI5+G3iKjHuJgDsF0QkiopFv6xUlGGhQJxbIP9Rz7iJ5QFLxzACPXzSghQ7USMRZf5ozbJrZazwSxW2qy1FkGzb6RuWlQKqJys9qoUlVWWspjukZHYGSSjM0pilef0Nc9DvqpDVdryxAiSaV95QMtx4g0PewJSU33WUaqwSk/n1Nt+28PapaS7pSXfPUxlqhy7RVMyJkbyPoDLnV6xA1zm7J7A1XiwGoVbusW2BgIcd57NFmancwX timycmorozov5795@gmail.com
 
 # nodejs здесь намеренно нет: из репозитория Ubuntu приедет 18-я версия,
 # а проекту нужна 20+. Ставим её ниже, из NodeSource.
