@@ -1,0 +1,156 @@
+#cloud-config
+# Первоначальная настройка сервера под Swiper (Ubuntu 24.04).
+#
+# ПЕРЕД ВСТАВКОЙ В ПАНЕЛЬ: подставьте свой публичный SSH-ключ в поле
+# ssh_authorized_keys ниже. Взять его на Windows:
+#     type $env:USERPROFILE\.ssh\swiper-real.pub
+#
+# Что делает: заводит пользователя swiper, ставит Node 22, git, nginx,
+# поднимает приёмник кода с автосборкой и службу приложения.
+# Выкладка потом — одной командой с ноутбука: git push server master
+
+package_update: true
+package_upgrade: true
+
+users:
+  - name: swiper
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA_ВСТАВЬТЕ_СЮДА_СВОЙ_КЛЮЧ
+
+# nodejs здесь намеренно нет: из репозитория Ubuntu приедет 18-я версия,
+# а проекту нужна 20+. Ставим её ниже, из NodeSource.
+packages:
+  - git
+  - tmux
+  - nginx
+  - curl
+  - ca-certificates
+  - rsync
+
+write_files:
+  # ---------------------------------------------------------- служба
+  - path: /etc/systemd/system/swiper.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Swiper
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=swiper
+      WorkingDirectory=/home/swiper/app
+      EnvironmentFile=/home/swiper/app/.env.production
+      ExecStart=/usr/bin/npm run start
+      Restart=always
+      RestartSec=5
+      # Писать приложение может только в свой каталог данных.
+      ProtectSystem=strict
+      ReadWritePaths=/var/lib/swiper
+      PrivateTmp=true
+      NoNewPrivileges=true
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # ------------------------------------------------------------ nginx
+  - path: /etc/nginx/sites-available/swiper
+    permissions: "0644"
+    content: |
+      server {
+          listen 80 default_server;
+          server_name _;
+
+          client_max_body_size 2m;
+
+          location / {
+              proxy_pass http://127.0.0.1:3000;
+              proxy_http_version 1.1;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              # По этому заголовку работает защита от перебора паролей:
+              # без него все посетители выглядят как один.
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+              proxy_set_header X-Forwarded-Host $host;
+          }
+      }
+
+  # ------------------------------- автосборка при получении кода
+  - path: /usr/local/bin/swiper-post-receive
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -e
+      export PATH=/usr/local/bin:/usr/bin:/bin
+      APP=/home/swiper/app
+      REPO=/home/swiper/repo.git
+
+      echo "→ выкладываю код"
+      mkdir -p "$APP"
+      git --work-tree="$APP" --git-dir="$REPO" checkout -f master
+
+      cd "$APP"
+      echo "→ ставлю зависимости (это долго)"
+      npm ci --no-audit --no-fund
+
+      echo "→ собираю"
+      npm run build
+
+      echo "→ перезапускаю службу"
+      sudo systemctl restart swiper
+      echo "✓ готово"
+
+runcmd:
+  # Сборка Next.js требует около 1,5 ГБ. На тарифах с 1 ГБ без свопа она
+  # падает по памяти, поэтому добавляем его заранее — лишним не будет.
+  - [sh, -c, "test -f /swapfile || (fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab)"]
+
+  # Node 22 из NodeSource.
+  - [sh, -c, "curl -fsSL https://deb.nodesource.com/setup_22.x | bash -"]
+  - [apt-get, install, -y, nodejs]
+
+  # Медленный канал до реестра npm — увеличиваем терпение.
+  - [sudo, -u, swiper, npm, config, set, fetch-timeout, "600000"]
+  - [sudo, -u, swiper, npm, config, set, fetch-retries, "5"]
+
+  # Каталог данных: учётные записи живут отдельно от кода, чтобы выкладка
+  # их не задевала.
+  - [mkdir, -p, /var/lib/swiper]
+  - [chown, "swiper:swiper", /var/lib/swiper]
+  - [chmod, "700", /var/lib/swiper]
+
+  # Приёмник кода: сюда вы пушите с ноутбука, минуя GitHub.
+  - [sudo, -u, swiper, git, init, --bare, /home/swiper/repo.git]
+  - [cp, /usr/local/bin/swiper-post-receive, /home/swiper/repo.git/hooks/post-receive]
+  - [chmod, "+x", /home/swiper/repo.git/hooks/post-receive]
+  - [chown, -R, "swiper:swiper", /home/swiper/repo.git]
+
+  # Настройки приложения. Адрес определяем сам — по нему строятся ссылки в
+  # письмах и решается, ставить ли куке флаг Secure.
+  - [sh, -c, "IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}'); [ -n \"$IP\" ] || IP=$(hostname -I | awk '{print $1}'); printf 'APP_URL=http://%s\\nAUTH_FILE=/var/lib/swiper/auth.json\\nNODE_ENV=production\\n' \"$IP\" > /home/swiper/.env.production"]
+  - [chown, "swiper:swiper", /home/swiper/.env.production]
+  - [chmod, "600", /home/swiper/.env.production]
+
+  # nginx
+  - [ln, -sf, /etc/nginx/sites-available/swiper, /etc/nginx/sites-enabled/swiper]
+  - [rm, -f, /etc/nginx/sites-enabled/default]
+  - [nginx, -t]
+  - [systemctl, reload, nginx]
+
+  # Брандмауэр
+  - [ufw, allow, OpenSSH]
+  - [ufw, allow, "80"]
+  - [ufw, allow, "443"]
+  - [sh, -c, "ufw --force enable"]
+
+  # Служба включена, но не запущена: кода ещё нет, он приедет первым push'ем.
+  - [systemctl, daemon-reload]
+  - [systemctl, enable, swiper]
+
+  - [sh, -c, "node -v > /var/log/swiper-init.log 2>&1; echo 'cloud-init завершён' >> /var/log/swiper-init.log"]
+
+final_message: "Сервер готов. Дальше — git push server master с ноутбука."
