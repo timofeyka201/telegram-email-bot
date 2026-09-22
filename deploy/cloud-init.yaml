@@ -39,13 +39,16 @@ write_files:
       Type=simple
       User=swiper
       WorkingDirectory=/home/swiper/app
-      EnvironmentFile=/home/swiper/app/.env.production
+      EnvironmentFile=/home/swiper/.env.production
       ExecStart=/usr/bin/npm run start
       Restart=always
       RestartSec=5
-      # Писать приложение может только в свой каталог данных.
+      # Писать приложение может только в свой каталог данных и в свою сборку:
+      # Next.js держит кэш в .next/cache.
       ProtectSystem=strict
-      ReadWritePaths=/var/lib/swiper
+      # Дефис перед путём — «не падать, если каталога нет»: npm заводит ~/.npm
+      # сам и пишет туда логи при ошибках.
+      ReadWritePaths=/var/lib/swiper /home/swiper/app -/home/swiper/.npm
       PrivateTmp=true
       NoNewPrivileges=true
 
@@ -115,8 +118,14 @@ write_files:
 
       echo "→ забираю свежий код с GitHub"
       # Ограничение по времени: некоторые российские хостинги до GitHub не
-      # достают, и без него команда висела бы минутами.
-      timeout 180 git --git-dir="$REPO" fetch --depth 20 "$URL" "+master:master"
+      # достают, и без него команда висела бы минутами. Неудачу именно этого
+      # шага называем отдельно — иначе поломка сборки выглядит как проблема
+      # с сетью, и чинят не то.
+      if ! timeout 180 git --git-dir="$REPO" fetch --depth 20 "$URL" "+master:master"; then
+        echo "✗ GitHub с этого сервера недоступен."
+        echo "  Пришлите код с ноутбука: git push server master"
+        exit 2
+      fi
 
       exec /usr/local/bin/swiper-build
 
@@ -178,7 +187,7 @@ runcmd:
   # GitHub с этого хостинга недоступен, сервер остаётся готовым принять код
   # с ноутбука командой git push server master.
   - [sh, -c, "node -v > /var/log/swiper-init.log 2>&1"]
-  - [sh, -c, "sudo -u swiper /usr/local/bin/swiper-update >> /var/log/swiper-init.log 2>&1 || echo 'GitHub недоступен — пришлите код с ноутбука: git push server master' >> /var/log/swiper-init.log"]
+  - [sh, -c, "sudo -u swiper /usr/local/bin/swiper-update >> /var/log/swiper-init.log 2>&1 || echo '✗ первая выкладка не удалась, смотрите вывод выше' >> /var/log/swiper-init.log"]
   - [sh, -c, "echo 'cloud-init завершён' >> /var/log/swiper-init.log"]
 
 final_message: "Сервер готов. Дальше — git push server master с ноутбука."
