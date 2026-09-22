@@ -75,8 +75,11 @@ write_files:
           }
       }
 
-  # ------------------------------- автосборка при получении кода
-  - path: /usr/local/bin/swiper-post-receive
+  # ---------------------------- выкладка: общая часть для обоих путей
+  # Источник правды на сервере — репозиторий /home/swiper/repo.git. Его
+  # наполняет либо сам сервер с GitHub, либо push с ноутбука, если GitHub
+  # с этого хостинга недоступен. Сборка в обоих случаях одна и та же.
+  - path: /usr/local/bin/swiper-build
     permissions: "0755"
     content: |
       #!/bin/bash
@@ -99,6 +102,30 @@ write_files:
       echo "→ перезапускаю службу"
       sudo systemctl restart swiper
       echo "✓ готово"
+
+  # ------------------------------------- обновление прямо с GitHub
+  - path: /usr/local/bin/swiper-update
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -e
+      export PATH=/usr/local/bin:/usr/bin:/bin
+      REPO=/home/swiper/repo.git
+      URL=https://github.com/timofeyka201/telegram-email-bot.git
+
+      echo "→ забираю свежий код с GitHub"
+      # Ограничение по времени: некоторые российские хостинги до GitHub не
+      # достают, и без него команда висела бы минутами.
+      timeout 180 git --git-dir="$REPO" fetch --depth 20 "$URL" "+master:master"
+
+      exec /usr/local/bin/swiper-build
+
+  # ------------------------- приём кода, отправленного с ноутбука
+  - path: /usr/local/bin/swiper-post-receive
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      exec /usr/local/bin/swiper-build
 
 runcmd:
   # Сборка Next.js требует около 1,5 ГБ. На тарифах с 1 ГБ без свопа она
@@ -147,6 +174,11 @@ runcmd:
   - [systemctl, daemon-reload]
   - [systemctl, enable, swiper]
 
-  - [sh, -c, "node -v > /var/log/swiper-init.log 2>&1; echo 'cloud-init завершён' >> /var/log/swiper-init.log"]
+  # Пробуем поднять приложение сразу: тянем код с GitHub и собираем. Если
+  # GitHub с этого хостинга недоступен, сервер остаётся готовым принять код
+  # с ноутбука командой git push server master.
+  - [sh, -c, "node -v > /var/log/swiper-init.log 2>&1"]
+  - [sh, -c, "sudo -u swiper /usr/local/bin/swiper-update >> /var/log/swiper-init.log 2>&1 || echo 'GitHub недоступен — пришлите код с ноутбука: git push server master' >> /var/log/swiper-init.log"]
+  - [sh, -c, "echo 'cloud-init завершён' >> /var/log/swiper-init.log"]
 
 final_message: "Сервер готов. Дальше — git push server master с ноутбука."
