@@ -13,7 +13,8 @@
     "catalog:global": "node scripts/build-catalog-global.mjs",
     "catalog:clean": "node scripts/clean-catalog.mjs",
     "catalog:ali": "node scripts/build-catalog-aliexpress.mjs",
-    "icons": "node scripts/make-icons.mjs"
+    "icons": "node scripts/make-icons.mjs",
+    "catalog:etsy": "node scripts/build-catalog-etsy.mjs"
   },
   "dependencies": {
     "framer-motion": "^11.11.17",

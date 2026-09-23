@@ -1,4 +1,4 @@
-import catalog from "../../../data/catalog.json";
+import { catalogCategories, catalogInfo, catalogProducts } from "../catalog";
 import { categoryLabel } from "../categories";
 import type { Product } from "../types";
 import { toRub } from "../money";
@@ -11,20 +11,11 @@ import { decodeCursor, encodeCursor, mulberry32, shuffle, type Filters, type Pag
  * лимитов, ни блокировок по IP, которыми маркетплейсы встречают серверные
  * запросы из дата-центров.
  *
- * Наполняется двумя способами: scripts/make-seed.mjs (синтетика для старта)
- * и scripts/build-catalog.mjs (настоящие товары с маркетплейса).
+ * Наполняется импортёрами (scripts/build-catalog-*.mjs), которые пишут снапшот
+ * на диск. Читается он лениво, поэтому обновлённый каталог подхватывается без
+ * перезапуска приложения.
  */
 
-type CatalogFile = {
-  version: number;
-  kind: string;
-  generatedAt?: string;
-  categories?: string[];
-  products: Product[];
-};
-
-const FILE = catalog as unknown as CatalogFile;
-const ALL: Product[] = Array.isArray(FILE.products) ? FILE.products : [];
 const PAGE = 12;
 
 /**
@@ -33,9 +24,9 @@ const PAGE = 12;
  * становится значением фильтра. Одиночные категории в список не берём: выбирать
  * из них нечего, а строку фильтров они забивают.
  */
-function buildCategoryFacets(): string[] {
+function buildCategoryFacets(all: Product[]): string[] {
   const counts = new Map<string, number>();
-  for (const p of ALL) {
+  for (const p of all) {
     if (!p.category) continue;
     const label = categoryLabel(p.category);
     counts.set(label, (counts.get(label) ?? 0) + 1);
@@ -51,7 +42,7 @@ function buildCategoryFacets(): string[] {
  * на тот же товар, поэтому суффикс отбрасываем.
  */
 export function currentPrices(ids: string[]): Record<string, number> {
-  const byId = new Map(ALL.map((p) => [p.id, p]));
+  const byId = new Map(catalogProducts().map((p) => [p.id, p]));
   const out: Record<string, number> = {};
   for (const id of ids) {
     const base = id.replace(/-r\d+$/, "");
@@ -61,19 +52,24 @@ export function currentPrices(ids: string[]): Record<string, number> {
   return out;
 }
 
-/** Диапазон цен и список категорий нужны панели фильтров. */
-export const catalogFacets = {
-  categories: buildCategoryFacets(),
-  maxPrice: ALL.reduce((max, p) => (p.price !== undefined && p.price > max ? p.price : max), 0),
-  currency: ALL[0]?.currency ?? "RUB",
-};
+/**
+ * Диапазон цен и список категорий для панели фильтров. Пересчитываются вместе
+ * со снапшотом: прежние константы вычислялись один раз при запуске и после
+ * обновления каталога показывали бы вчерашние категории.
+ */
+export function facets(): { categories: string[]; maxPrice: number; currency: string } {
+  const all = catalogProducts();
+  return {
+    categories: buildCategoryFacets(all),
+    maxPrice: all.reduce((max, p) => (p.price !== undefined && p.price > max ? p.price : max), 0),
+    currency: all[0]?.currency ?? "RUB",
+  };
+}
 
-export const catalogMeta = {
-  kind: FILE.kind ?? "unknown",
-  generatedAt: FILE.generatedAt ?? null,
-  total: ALL.length,
-  categories: FILE.categories ?? [...new Set(ALL.map((p) => p.category).filter(Boolean) as string[])],
-};
+export function meta(): { kind: string; generatedAt: string | null; total: number; categories: string[]; source: string } {
+  const info = catalogInfo();
+  return { ...info, categories: catalogCategories() };
+}
 
 /** Поиск по названию, категории, бренду и характеристикам — без внешних сервисов. */
 function match(p: Product, q: string): boolean {
@@ -120,20 +116,26 @@ function score(p: Product, hint: TasteHint | undefined, rnd: () => number): numb
 export const localProvider: Provider = {
   id: "local",
   label: "Своя база",
-  note: `${ALL.length} карточек в репозитории. Работает всегда, без внешних API.`,
+  get note() {
+    return `${catalogProducts().length} карточек в снапшоте. Работает всегда, без внешних API.`;
+  },
   needsToken: false,
-  ready: () => ALL.length > 0,
+  ready: () => catalogProducts().length > 0,
 
   async page({ query, cursor, seed, filters, hint }: PageArgs): Promise<ProviderPage> {
     const { offset, round } = decodeCursor(cursor);
 
+    // Снимок берём один раз на запрос: между строками он может смениться, если
+    // импортёр как раз дописал новый.
+    const all = catalogProducts();
+
     // Отвергнутое исключаем жёстко: свайп влево — это «больше не показывай».
     const banned = new Set(hint?.exclude ?? []);
-    const pool = ALL.filter(
+    const pool = all.filter(
       (p) => !banned.has(p.id) && (query ? match(p, query) : true) && passes(p, filters),
     );
     // Пустой результат — не повод показывать пустоту: откатываемся к витрине.
-    const source = pool.length ? pool : ALL.filter((p) => !banned.has(p.id));
+    const source = pool.length ? pool : all.filter((p) => !banned.has(p.id));
     if (!source.length) return { products: [], cursor: encodeCursor(0, round), looped: false };
 
     // Порядок свой на каждый круг и на каждую сессию — лента не повторяется.

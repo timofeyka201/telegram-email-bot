@@ -35,6 +35,17 @@ const LABELS: Record<string, string> = {
   miscellaneous: "Разное",
   "men's clothing": "Мужская одежда",
   "women's clothing": "Женская одежда",
+  // Категории импортёра Etsy: он раскладывает товары по тегам продавца.
+  jewelry: "Украшения",
+  bags: "Сумки",
+  kitchen: "Для кухни",
+  art: "Постеры и картины",
+  clothing: "Одежда",
+  toys: "Игрушки",
+  home: "Для дома",
+  pets: "Для питомцев",
+  stationery: "Канцелярия",
+  misc: "Разное",
 };
 
 /**
