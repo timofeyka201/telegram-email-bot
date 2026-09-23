@@ -23,7 +23,14 @@ const args = Object.fromEntries(
 );
 
 const BASE = (process.env.ETSY_BASE || "https://openapi.etsy.com").replace(/\/+$/, "");
-const KEY = process.env.ETSY_API_KEY?.trim();
+/**
+ * Etsy требует в x-api-key пару «keystring:shared_secret». Секрет можно задать
+ * отдельной переменной — так его удобнее хранить и не приходится склеивать
+ * строку руками при каждом запуске.
+ */
+const SECRET = process.env.ETSY_SHARED_SECRET?.trim();
+const RAW_KEY = process.env.ETSY_API_KEY?.trim();
+const KEY = RAW_KEY && SECRET && !RAW_KEY.includes(":") ? `${RAW_KEY}:${SECRET}` : RAW_KEY;
 const OUT = String(args.out || process.env.CATALOG_FILE || "data/catalog.json");
 const LEDGER = join(dirname(OUT), "catalog-budget.json");
 
@@ -83,10 +90,15 @@ async function call(path, params) {
       );
     }
     if (res.status === 403) {
+      // Etsy сам пишет причину, и она бывает разной: то не хватает секрета в
+      // ключе, то приложение ещё не одобрено. Ставим его текст первым, а свои
+      // домыслы — только там, где они уместны.
+      const needsSecret = /shared secret/i.test(body);
       throw new Error(
-        `Etsy отказал в доступе (403). Обычно это значит, что приложение ещё не ` +
-          `одобрено: у новых приложений доступ к публичным ручкам открывается ` +
-          `после проверки. Ответ: ${body}`,
+        `Etsy отказал (403): ${body}` +
+          (needsSecret && !KEY.includes(":")
+            ? `\n  → в x-api-key нужна пара «keystring:shared_secret». Задайте ETSY_SHARED_SECRET рядом с ETSY_API_KEY.`
+            : ""),
       );
     }
     throw new Error(`Etsy ответил ${res.status}: ${body}`);
@@ -186,7 +198,7 @@ function writeSnapshot(file) {
 // ---------------------------------------------------------------- ход
 async function main() {
   if (!KEY) {
-    console.error("Нужен ETSY_API_KEY. Ключ берётся в кабинете разработчика Etsy.");
+    console.error("Нужен ETSY_API_KEY (keystring) и ETSY_SHARED_SECRET. Оба берутся в кабинете разработчика Etsy.");
     process.exitCode = 1;
     return;
   }
