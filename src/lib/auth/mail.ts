@@ -34,10 +34,28 @@ export async function sendMail(to: string, subject: string, html: string, text: 
     if (res.ok) return { delivered: true };
 
     const body = await res.text().catch(() => "");
-    if (res.status === 401 || res.status === 403) return { delivered: false, reason: "почтовый ключ не подошёл" };
-    // Самая частая ошибка настройки: домен отправителя не подтверждён у провайдера.
-    if (res.status === 422) return { delivered: false, reason: `адрес отправителя отклонён: ${body.slice(0, 160)}` };
-    return { delivered: false, reason: `почтовый сервис ответил ${res.status}: ${body.slice(0, 160)}` };
+    const sandbox = !clean(process.env.MAIL_FROM);
+
+    // 401 — ключ и правда негоден.
+    if (res.status === 401) return { delivered: false, reason: `почтовый ключ не подошёл: ${body.slice(0, 160)}` };
+
+    // 403 приходит и на негодный ключ, и — гораздо чаще — на попытку послать
+    // письмо постороннему адресу с песочницы провайдера. Валить это на ключ
+    // значит отправить человека чинить исправное.
+    if (res.status === 403) {
+      return {
+        delivered: false,
+        reason: sandbox
+          ? "письма с адреса песочницы уходят только владельцу аккаунта. " +
+            "Подтвердите свой домен у провайдера и задайте MAIL_FROM — тогда письма пойдут всем. " +
+            `Ответ провайдера: ${body.slice(0, 200)}`
+          : `провайдер отказал: ${body.slice(0, 200)}`,
+      };
+    }
+
+    // Домен отправителя не подтверждён или адрес в MAIL_FROM не из него.
+    if (res.status === 422) return { delivered: false, reason: `адрес отправителя отклонён: ${body.slice(0, 200)}` };
+    return { delivered: false, reason: `почтовый сервис ответил ${res.status}: ${body.slice(0, 200)}` };
   } catch (e) {
     return { delivered: false, reason: e instanceof Error ? e.message : "почтовый сервис недоступен" };
   }
