@@ -149,6 +149,12 @@ self.addEventListener("fetch", (event) => {
 
   if (url.origin === self.location.origin) {
     // Сборки Next лежат по хэшированным адресам — содержимое по ним не меняется.
+    // /media — картинки каталога: имя файла содержит хэш, содержимое по нему
+    // не меняется, поэтому кэш навсегда.
+    if (url.pathname.startsWith("/media/")) {
+      event.respondWith(cacheFirst(request, IMAGES, IMAGE_LIMIT));
+      return;
+    }
     if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/")) {
       event.respondWith(cacheFirst(request, SHELL));
       return;
