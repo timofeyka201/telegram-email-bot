@@ -72,7 +72,25 @@ async function call(path, params) {
   spent += 1;
   const res = await fetch(url, { headers: { "x-api-key": KEY }, cache: "no-store" });
   if (res.status === 429) throw new Error("LIMIT");
-  if (!res.ok) throw new Error(`Etsy ответил ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  if (!res.ok) {
+    const body = (await res.text()).slice(0, 300);
+    // Отказ по ключу выглядит одинаково при трёх разных причинах, а чинятся они
+    // по-разному — поэтому называем их прямо, а не показываем голый код.
+    if (res.status === 401) {
+      throw new Error(
+        `Etsy не принял ключ (401). В x-api-key нужен keystring приложения. ` +
+          `Если keystring верный, попробуйте форму «keystring:shared_secret». Ответ: ${body}`,
+      );
+    }
+    if (res.status === 403) {
+      throw new Error(
+        `Etsy отказал в доступе (403). Обычно это значит, что приложение ещё не ` +
+          `одобрено: у новых приложений доступ к публичным ручкам открывается ` +
+          `после проверки. Ответ: ${body}`,
+      );
+    }
+    throw new Error(`Etsy ответил ${res.status}: ${body}`);
+  }
   return res.json();
 }
 
@@ -169,6 +187,13 @@ function writeSnapshot(file) {
 async function main() {
   if (!KEY) {
     console.error("Нужен ETSY_API_KEY. Ключ берётся в кабинете разработчика Etsy.");
+    process.exitCode = 1;
+    return;
+  }
+  // В заголовок HTTP можно положить только ASCII. Без этой проверки опечатка с
+  // кириллицей или лишними кавычками роняет скрипт невнятной ошибкой из fetch.
+  if (!/^[\x21-\x7e]+$/.test(KEY)) {
+    console.error("ETSY_API_KEY содержит недопустимые символы. Ожидается строка без пробелов и кавычек, только латиница и цифры.");
     process.exitCode = 1;
     return;
   }
