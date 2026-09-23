@@ -138,9 +138,13 @@ function categoryOf(listing) {
  *  станет дотягивать описание по сети при открытии товара. */
 function toProduct(listing, images) {
   const price = money(listing.price);
+  // Берём вариант на 570 точек, а не полноразмерный: карточка на телефоне —
+  // около 350 точек шириной, а url_fullxfull у Etsy бывает 2000–3000 и весит
+  // сотни килобайт. На мобильной сети это разница между «мгновенно» и
+  // «подождите».
   const pics = (images ?? [])
     .sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0))
-    .map((i) => i.url_fullxfull || i.url_570xN || i.url_170x135)
+    .map((i) => i.url_570xN || i.url_fullxfull || i.url_170x135)
     .filter(Boolean)
     .slice(0, 8);
 

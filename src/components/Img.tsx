@@ -15,6 +15,18 @@ type Props = {
   eager?: boolean;
 };
 
+/**
+ * Загрузить картинку заранее, пока человек смотрит на предыдущую. Браузер
+ * положит её в свой кэш, и к моменту показа она уже будет на месте.
+ */
+export function prefetchImage(src?: string): void {
+  if (!src || typeof window === "undefined") return;
+  const img = new Image();
+  img.referrerPolicy = "no-referrer";
+  img.decoding = "async";
+  img.src = src;
+}
+
 type Stage = "direct" | "proxy" | "failed";
 
 /**
@@ -57,6 +69,9 @@ export default function Img({ src, alt, className = "", fallbackLabel, eager }: 
         src={url}
         alt={alt}
         loading={eager ? "eager" : "lazy"}
+        // Верхняя карточка важнее фоновых: без подсказки браузер раздаёт им
+        // канал поровну, и видимая картинка ждёт невидимых.
+        fetchPriority={eager ? "high" : "low"}
         decoding="async"
         draggable={false}
         referrerPolicy="no-referrer"

@@ -12,6 +12,7 @@ import TasteQuiz from "@/components/TasteQuiz";
 import ProductSheet from "@/components/ProductSheet";
 import SettingsSheet from "@/components/SettingsSheet";
 import SwipeCard from "@/components/SwipeCard";
+import { prefetchImage } from "@/components/Img";
 import TopBar from "@/components/TopBar";
 import { IconCart, IconHeart, IconSearch, IconSliders } from "@/components/Icons";
 import { toast } from "@/components/Toast";
@@ -20,6 +21,8 @@ import { DAILY_GOAL, useHydrated, useStore, type Decision } from "@/lib/store";
 import type { Product } from "@/lib/types";
 
 const VISIBLE = 3;
+/** Сколько карточек за видимой стопкой подгружать заранее. */
+const PREFETCH = 4;
 /** За сколько карточек до конца просить следующую страницу. */
 const PREFETCH_AT = 8;
 /** Сколько первых свайпов подсвечивать зоны тапа. */
@@ -71,6 +74,17 @@ export default function DeckPage() {
 
   const visible = deck.slice(index, index + VISIBLE);
   const remaining = Math.max(0, deck.length - index);
+
+  /**
+   * Картинки следующих карточек тянем заранее. В стопке видны три, а свайпают
+   * быстро: без этого каждая четвёртая карточка встречает человека серым
+   * прямоугольником, пока грузится фотография.
+   */
+  useEffect(() => {
+    for (const product of deck.slice(index + VISIBLE, index + VISIBLE + PREFETCH)) {
+      prefetchImage(product.images[0]);
+    }
+  }, [deck, index]);
 
   /**
    * Снижение цены ищем один раз за запуск: сверяем запомненные цены отложенных
