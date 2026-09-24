@@ -447,6 +447,9 @@ export const useStore = create<State>()(
           index: 0,
           liked: [],
           wishlist: [],
+          // Иначе значок в меню продолжает показывать число желаний,
+          // приехавшее с сервера до очистки.
+          wishTotal: null,
           seen: [],
           rejected: [],
           cart: [],

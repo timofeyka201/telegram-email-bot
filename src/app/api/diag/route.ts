@@ -12,6 +12,13 @@ export const maxDuration = 30;
  * означать и отказ поиска, и неверную корзину CDN, и блокировку по IP.
  */
 export async function GET(req: NextRequest) {
+  // Открытая наружу, эта страница показывает настройки источников и заставляет
+  // сервер ходить по чужим API по первому запросу любого прохожего. Закрываем
+  // тем же ключом, что и /api/debug.
+  if (process.env.NODE_ENV === "production" && process.env.ENABLE_DEBUG !== "1") {
+    return NextResponse.json({ error: "disabled" }, { status: 404 });
+  }
+
   const started = Date.now();
   const out: Record<string, unknown> = { providers: providerInfo() };
 
