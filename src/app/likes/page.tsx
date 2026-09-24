@@ -26,7 +26,6 @@ export default function LikesPage() {
   const hydrated = useHydrated();
   const liked = useStore((s) => s.liked);
   const wishlist = useStore((s) => s.wishlist);
-  const toggleWish = useStore((s) => s.toggleWish);
   const drops = useStore((s) => s.drops);
   const cart = useStore((s) => s.cart);
   const rates = useStore((s) => s.rates);
@@ -34,11 +33,11 @@ export default function LikesPage() {
   const addToCart = useStore((s) => s.addToCart);
   const [sheet, setSheet] = useState<Product | null>(null);
   const [sort, setSort] = useState<Sort>("new");
-  const [tab, setTab] = useState<"liked" | "wish">("liked");
   const [category, setCategory] = useState<string | null>(null);
 
-  // Вишлист — отдельная полка: туда кладут осознанно и следят за ценой.
-  const source = tab === "liked" ? liked : wishlist;
+  // Вишлист переехал на свою страницу: там он умеет то, ради чего заводится
+  // список желаний, — код, ссылку и брони друзей. Здесь остаётся полка «понравилось».
+  const source = liked;
 
   const categories = useMemo(
     () => [...new Set(source.map((p) => p.category).filter(Boolean) as string[])],
@@ -68,30 +67,16 @@ export default function LikesPage() {
           </span>
         </div>
 
-        <div className="mx-4 mb-2 flex rounded-full bg-[var(--color-surface-2)] p-1">
-          {(
-            [
-              ["liked", "Понравилось", liked.length],
-              ["wish", "Вишлист", wishlist.length],
-            ] as const
-          ).map(([id, label, count]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => {
-                setTab(id);
-                setCategory(null);
-              }}
-              aria-pressed={tab === id}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-full py-2 text-[13px] font-bold transition-colors ${
-                tab === id ? "bg-[var(--color-surface)] text-[var(--color-ink)] soft-shadow" : "text-[var(--color-muted)]"
-              }`}
-            >
-              {label}
-              {count > 0 && <span className="tnum opacity-60">{count}</span>}
-            </button>
-          ))}
-        </div>
+        <Link
+          href="/wishlist"
+          className="mx-4 mb-2 flex items-center gap-2 rounded-2xl bg-[var(--color-brand-soft)] px-4 py-2.5 text-[13px] font-bold text-[var(--color-brand)]"
+        >
+          <IconBookmark className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">
+            Вишлист{wishlist.length > 0 && <span className="tnum opacity-70"> · {wishlist.length}</span>}
+          </span>
+          <span className="shrink-0 font-medium opacity-70">поделиться и принять брони</span>
+        </Link>
 
         {source.length > 0 && (
           <div className="no-scrollbar flex w-full min-w-0 items-center gap-1.5 overflow-x-auto px-4 pb-2">
@@ -139,7 +124,7 @@ export default function LikesPage() {
       {drops.length > 0 && <PriceDrops drops={drops} />}
 
       {source.length === 0 ? (
-        <Empty kind={tab} />
+        <Empty />
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 p-4 pb-28">
@@ -201,10 +186,9 @@ export default function LikesPage() {
                       </button>
                       <button
                         type="button"
-                        aria-label={tab === "liked" ? "Убрать из избранного" : "Убрать из вишлиста"}
+                        aria-label="Убрать из избранного"
                         onClick={() => {
-                          if (tab === "liked") unlike(p.id);
-                          else toggleWish(p);
+                          unlike(p.id);
                           toast("Убрали");
                         }}
                         className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--color-surface-2)] text-[var(--color-muted)]"
@@ -241,27 +225,16 @@ export default function LikesPage() {
   );
 }
 
-function Empty({ kind }: { kind: "liked" | "wish" }) {
-  const wish = kind === "wish";
+function Empty() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 px-10 text-center">
-      <span
-        className={`flex items-center justify-center rounded-full p-5 ${
-          wish ? "bg-[var(--color-brand-soft)]" : "bg-[var(--color-like-soft)]"
-        }`}
-      >
-        {wish ? (
-          <IconBookmark className="h-8 w-8 text-[var(--color-brand)]" />
-        ) : (
-          <IconHeart className="h-8 w-8 text-[var(--color-like)]" />
-        )}
+      <span className="flex items-center justify-center rounded-full bg-[var(--color-like-soft)] p-5">
+        <IconHeart className="h-8 w-8 text-[var(--color-like)]" />
       </span>
       <div>
-        <h2 className="font-display text-[18px] font-bold">{wish ? "Вишлист пуст" : "Пока пусто"}</h2>
+        <h2 className="font-display text-[18px] font-bold">Пока пусто</h2>
         <p className="mt-1.5 text-[14px] leading-snug text-[var(--color-muted)]">
-          {wish
-            ? "Откройте товар и нажмите закладку — будем следить за его ценой и скажем, когда подешевеет."
-            : "Свайпайте карточки вправо — понравившееся будет собираться здесь."}
+          Свайпайте карточки вправо — понравившееся будет собираться здесь.
         </p>
       </div>
       <Link href="/" className="brand-gradient rounded-2xl px-6 py-3 text-[15px] font-bold text-white">

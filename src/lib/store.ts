@@ -100,6 +100,8 @@ type State = {
   unlike: (id: string) => void;
   like: (product: Product) => void;
   toggleWish: (product: Product) => void;
+  /** Вишлист приехал с сервера: локальная копия должна совпасть с ним целиком. */
+  setWishlist: (products: Product[]) => void;
   addToCart: (product: Product, sku?: string) => void;
   setQty: (id: string, qty: number) => void;
   removeFromCart: (id: string) => void;
@@ -308,6 +310,18 @@ export const useStore = create<State>()(
           return has
             ? { wishlist: s.wishlist.filter((p) => p.id !== product.id), updatedAt: Date.now() }
             : { wishlist: [product, ...s.wishlist], watch: rememberPrice(s.watch, product), updatedAt: Date.now() };
+        }),
+
+      setWishlist: (products) =>
+        set((s) => {
+          const same =
+            s.wishlist.length === products.length && s.wishlist.every((p, i) => p.id === products[i].id);
+          // Без этой проверки страница, обновляющая копию после каждой загрузки,
+          // толкала бы синхронизацию профиля по кругу.
+          if (same) return s;
+          let watch = s.watch;
+          for (const p of products) watch = rememberPrice(watch, p);
+          return { wishlist: products, watch, updatedAt: Date.now() };
         }),
 
       addToCart: (product, sku) =>

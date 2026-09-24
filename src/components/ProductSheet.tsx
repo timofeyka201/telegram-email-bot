@@ -8,6 +8,7 @@ import SizeGuide from "./SizeGuide";
 import SizeProfileSheet from "./SizeProfileSheet";
 import { toast } from "./Toast";
 import { useStore } from "@/lib/store";
+import { pushWish } from "@/lib/wish/client";
 import type { Attribute, Product } from "@/lib/types";
 import { compact, formatNative, formatRub, needsConversion, plural, priceRange } from "@/lib/money";
 
@@ -292,6 +293,8 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
           type="button"
           onClick={() => {
             toggleWish(full);
+            // Вишлист вошедшего живёт на сервере: его открывают по ссылке друзья.
+            pushWish(full, !wished);
             toast(wished ? "Убрали из вишлиста" : "В вишлисте — следим за ценой", wished ? "default" : "like");
           }}
           aria-label={wished ? "Убрать из вишлиста" : "В вишлист"}
