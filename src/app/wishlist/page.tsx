@@ -101,10 +101,11 @@ export default function WishlistPage() {
       </header>
 
       <div className="flex flex-1 flex-col gap-4 p-4 pb-28">
-        <FindByCode />
-
         {!account ? (
-          <GuestBlock count={localWishlist.length} onLogin={() => setAuthOpen(true)} />
+          <>
+            <GuestBlock count={localWishlist.length} onLogin={() => setAuthOpen(true)} />
+            <FindByCode />
+          </>
         ) : loading ? (
           <p className="py-10 text-center text-[14px] text-[var(--color-muted)]">Загружаем…</p>
         ) : !view ? (
@@ -154,6 +155,9 @@ export default function WishlistPage() {
         ) : (
           <Gifts entries={gifts} />
         )}
+
+        {/* Поиск внизу: вошедший пришёл сюда за своим списком, а не за чужим. */}
+        {account && <FindByCode />}
       </div>
 
       <WishCardForm
@@ -197,6 +201,7 @@ function FindByCode() {
       className="soft-shadow rounded-3xl bg-[var(--color-surface)] p-4"
     >
       <p className="mb-2 text-[13px] font-bold">Открыть чужой вишлист</p>
+      <p className="mb-2 text-[12px] leading-snug text-[var(--color-muted)]">Введите код друга или вставьте ссылку на его список.</p>
       <div className="flex gap-2">
         <input
           value={value}
@@ -204,11 +209,11 @@ function FindByCode() {
             setValue(e.target.value);
             setError(null);
           }}
-          placeholder="SW-K7QM4X или ссылка"
+          placeholder="SW-K7QM4X"
           autoCapitalize="characters"
           autoCorrect="off"
           spellCheck={false}
-          className="w-full min-w-0 rounded-2xl border border-[var(--color-line)] bg-[var(--color-bg)] px-3.5 py-2.5 text-[15px] uppercase outline-none focus:border-[var(--color-brand)]"
+          className="w-full min-w-0 rounded-2xl border border-[var(--color-line)] bg-[var(--color-bg)] px-3.5 py-2.5 text-[15px] uppercase outline-none placeholder:normal-case focus:border-[var(--color-brand)]"
         />
         <button
           type="submit"
@@ -473,7 +478,8 @@ function Gifts({ entries }: { entries: ReservedEntry[] }) {
           <div className="flex min-w-0 flex-1 flex-col justify-center">
             <p className="line-clamp-2 text-[14px] font-semibold leading-tight">{entry.title}</p>
             <p className="mt-1 text-[12px] text-[var(--color-muted)]">
-              Для {entry.ownerName}
+              {/* «Для {имя}» требует падежа, а имя произвольное. Двоеточие честнее. */}
+              Кому: {entry.ownerName}
               {entry.price !== undefined && ` · ${formatRub(entry.price, entry.currency, rates)}`}
             </p>
             <Link

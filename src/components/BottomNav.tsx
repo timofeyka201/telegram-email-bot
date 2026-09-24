@@ -17,7 +17,7 @@ export default function BottomNav() {
   const pathname = usePathname();
   const hydrated = useHydrated();
   const likes = useStore((s) => s.liked.length);
-  const wishes = useStore((s) => s.wishlist.length);
+  const wishes = useStore((s) => s.wishTotal ?? s.wishlist.length);
   const cart = useStore((s) => s.cart.length);
   const counts: Record<string, number> = { "/likes": likes, "/wishlist": wishes, "/cart": cart };
 

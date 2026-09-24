@@ -78,6 +78,7 @@ type State = {
   taste: Taste;
   sizes: SizeProfile;
   watch: Record<string, PriceWatch>;
+  wishTotal: number | null;
   drops: PriceDrop[];
   dropsSeen: boolean;
   dislikesSinceAsk: number;
@@ -102,6 +103,12 @@ type State = {
   toggleWish: (product: Product) => void;
   /** Вишлист приехал с сервера: локальная копия должна совпасть с ним целиком. */
   setWishlist: (products: Product[]) => void;
+  /**
+   * Сколько желаний в серверном списке. Локальная копия хранит только карточки
+   * из ленты, поэтому считать значок в меню по ней — значит показывать
+   * заниженное число тому, кто добавил своих желаний.
+   */
+  setWishTotal: (total: number | null) => void;
   addToCart: (product: Product, sku?: string) => void;
   setQty: (id: string, qty: number) => void;
   removeFromCart: (id: string) => void;
@@ -139,6 +146,7 @@ export const useStore = create<State>()(
       taste: emptyTaste(),
       sizes: emptySizes(),
       watch: {},
+      wishTotal: null,
       drops: [],
       dropsSeen: true,
       dislikesSinceAsk: 0,
@@ -150,7 +158,8 @@ export const useStore = create<State>()(
       cursor: null,
       seed: Math.floor(Math.random() * 1e9),
 
-      setAccount: (account) => set({ account }),
+      // Выход должен уносить и счётчик: чужое число желаний в меню — мелочь, но вранье.
+      setAccount: (account) => set(account ? { account } : { account: null, wishTotal: null }),
 
       exportProfile: () => {
         const s = get();
@@ -311,6 +320,8 @@ export const useStore = create<State>()(
             ? { wishlist: s.wishlist.filter((p) => p.id !== product.id), updatedAt: Date.now() }
             : { wishlist: [product, ...s.wishlist], watch: rememberPrice(s.watch, product), updatedAt: Date.now() };
         }),
+
+      setWishTotal: (total) => set({ wishTotal: total }),
 
       setWishlist: (products) =>
         set((s) => {
@@ -474,6 +485,7 @@ export const useStore = create<State>()(
         taste: s.taste,
         sizes: s.sizes,
         watch: s.watch,
+        wishTotal: s.wishTotal,
         // Счётчик обязан пережить перезагрузку, иначе «раз в 200» не накопится.
         dislikesSinceAsk: s.dislikesSinceAsk,
         account: s.account,

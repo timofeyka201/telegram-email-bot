@@ -30,8 +30,16 @@ const jsonInit = (method: string, body: unknown): RequestInit => ({
 });
 
 /** Товары из ленты, лежащие в серверном списке, — для локальной копии. */
-export const productsOf = (view: OwnerView): Product[] =>
+const productsOf = (view: OwnerView): Product[] =>
   view.items.map((i) => i.product).filter((p): p is Product => !!p);
+
+/** Ответ сервера — истина: приводим к нему и копию, и счётчик в меню. */
+function apply(view: OwnerView): OwnerView {
+  const store = useStore.getState();
+  store.setWishlist(productsOf(view));
+  store.setWishTotal(view.items.length);
+  return view;
+}
 
 /**
  * Загрузка своего списка. Заодно доносит на сервер то, что человек успел
@@ -45,13 +53,16 @@ export async function loadMyWishlist(): Promise<OwnerView | null> {
     ? await call<{ wishlist: OwnerView }>("/api/wishlist/items", jsonInit("POST", { products: local }))
     : await call<{ wishlist: OwnerView }>("/api/wishlist");
   if (!data?.wishlist) return null;
-  useStore.getState().setWishlist(productsOf(data.wishlist));
-  return data.wishlist;
+  return apply(data.wishlist);
 }
 
 /** Закладку нажали в карточке товара: повторяем действие на сервере. */
 export function pushWish(product: Product, wished: boolean): void {
-  if (!isLoggedIn()) return;
+  const store = useStore.getState();
+  if (!store.account) return;
+  // Счётчик в меню поправляем сразу, не дожидаясь ответа: список всё равно
+  // перечитается при следующем открытии страницы, а значок дёргаться не должен.
+  if (store.wishTotal !== null) store.setWishTotal(Math.max(0, store.wishTotal + (wished ? 1 : -1)));
   void (wished
     ? call("/api/wishlist/items", jsonInit("POST", { products: [product] }))
     : call(`/api/wishlist/items/${encodeURIComponent(product.id)}`, { method: "DELETE" }));
@@ -72,8 +83,8 @@ export async function addCustomCard(item: CustomCard): Promise<{ wishlist?: Owne
   try {
     const res = await fetch("/api/wishlist/items", jsonInit("POST", { item }));
     const data = (await res.json()) as { wishlist?: OwnerView; error?: string };
-    if (!res.ok) return { error: data.error ?? "Не удалось сохранить" };
-    return { wishlist: data.wishlist };
+    if (!res.ok || !data.wishlist) return { error: data.error ?? "Не удалось сохранить" };
+    return { wishlist: apply(data.wishlist) };
   } catch {
     return { error: "Нет связи с сервером" };
   }
@@ -84,14 +95,12 @@ export type CardPatch = Partial<Omit<CustomCard, "price">> & { price?: number | 
 
 export async function patchItem(id: string, patch: CardPatch): Promise<OwnerView | null> {
   const data = await call<{ wishlist: OwnerView }>(`/api/wishlist/items/${encodeURIComponent(id)}`, jsonInit("PATCH", patch));
-  if (data?.wishlist) useStore.getState().setWishlist(productsOf(data.wishlist));
-  return data?.wishlist ?? null;
+  return data?.wishlist ? apply(data.wishlist) : null;
 }
 
 export async function removeItem(id: string): Promise<OwnerView | null> {
   const data = await call<{ wishlist: OwnerView }>(`/api/wishlist/items/${encodeURIComponent(id)}`, { method: "DELETE" });
-  if (data?.wishlist) useStore.getState().setWishlist(productsOf(data.wishlist));
-  return data?.wishlist ?? null;
+  return data?.wishlist ? apply(data.wishlist) : null;
 }
 
 export type FriendResult =

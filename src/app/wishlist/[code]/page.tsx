@@ -119,7 +119,7 @@ export default function FriendWishlistPage() {
 
             <p className="px-1 text-[12px] leading-snug text-[var(--color-muted)]">
               {view.canReserve
-                ? `${view.items.length} ${plural(view.items.length, "желание", "желания", "желаний")}. Бронь видна другим гостям, но не ${view.ownerName}.`
+                ? `${view.items.length} ${plural(view.items.length, "желание", "желания", "желаний")}. Бронь видна другим гостям, но не владельцу списка.`
                 : "Войдите, чтобы забронировать подарок — тогда другие гости увидят, что он уже занят."}
             </p>
 
