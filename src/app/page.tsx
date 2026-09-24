@@ -81,8 +81,11 @@ export default function DeckPage() {
    * прямоугольником, пока грузится фотография.
    */
   useEffect(() => {
-    for (const product of deck.slice(index + VISIBLE, index + VISIBLE + PREFETCH)) {
+    for (const [i, product] of deck.slice(index + VISIBLE, index + VISIBLE + PREFETCH).entries()) {
       prefetchImage(product.images[0]);
+      // У ближайших карточек берём заодно второй снимок: к моменту, когда
+      // карточка окажется наверху и по ней тапнут, он уже будет на месте.
+      if (i < 2) prefetchImage(product.images[1]);
     }
   }, [deck, index]);
 

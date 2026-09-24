@@ -1,8 +1,8 @@
 "use client";
 
 import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion";
-import { useRef, useState } from "react";
-import Img from "./Img";
+import { useEffect, useRef, useState } from "react";
+import Img, { prefetchImage } from "./Img";
 import { IconChevron, IconFlame, IconInfo, IconStar } from "./Icons";
 import { categoryLabel } from "@/lib/categories";
 import type { Product } from "@/lib/types";
@@ -59,6 +59,19 @@ export default function SwipeCard({ product, rates, depth, showHint, onDecide, o
 
   const prevImage = () => setImgIndex((i) => (i - 1 + images.length) % images.length);
   const nextImage = () => setImgIndex((i) => (i + 1) % images.length);
+
+  /**
+   * Соседние снимки грузим заранее. Раньше этого не делал никто: лента
+   * подтягивала только первое фото будущих карточек, а остальные начинали
+   * качаться в тот момент, когда человек по ним тапнул, — отсюда и пауза на
+   * каждом втором фото. Берём только соседей, а не всю карточку: десяток
+   * снимков разом отнял бы канал у того, который и так на экране.
+   */
+  useEffect(() => {
+    if (!interactive || images.length < 2) return;
+    prefetchImage(images[(imgIndex + 1) % images.length]);
+    if (images.length > 2) prefetchImage(images[(imgIndex - 1 + images.length) % images.length]);
+  }, [interactive, imgIndex, images]);
 
   /**
    * Тап распознаём сами, а не через onTap у Framer Motion: тот приходит с

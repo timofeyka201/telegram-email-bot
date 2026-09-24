@@ -28,6 +28,14 @@ const MANIFEST = join(DIR, "manifest.json");
 /** Ширина карточки на телефоне с запасом под плотные экраны. */
 const WIDTH = Number(args.width ?? 640);
 const QUALITY = Number(args.quality ?? 78);
+/**
+ * Лента превью под фотографией товара видна сразу, поэтому браузер начинает
+ * качать все снимки карточки разом — и они отнимают канал у той единственной
+ * фотографии, на которую человек смотрит. Поэтому для ленты делаем отдельный
+ * маленький файл: он весит единицы килобайт и никому не мешает.
+ */
+const THUMB = Number(args.thumb ?? 112);
+const THUMB_QUALITY = Number(args.thumbQuality ?? 70);
 /** Сколько картинок обработать за прогон: чтобы первый запуск не длился часами. */
 const LIMIT = Number(args.limit ?? Infinity);
 /** Качаем в несколько потоков, но без фанатизма — чужой CDN нам ничего не должен. */
@@ -43,6 +51,25 @@ try {
 
 /** Имя файла — от адреса: один и тот же снимок не скачивается дважды. */
 const nameFor = (url) => `${createHash("sha256").update(url).digest("hex").slice(0, 32)}.webp`;
+
+/** Превью лежит рядом с оригиналом и отличается только суффиксом. */
+const thumbNameFor = (name) => name.replace(/\.webp$/, "-t.webp");
+
+/** Запись через временный файл: сервер отдаёт эту папку и не должен встретить половину файла. */
+function writeAtomic(target, bytes) {
+  const tmp = `${target}.tmp`;
+  writeFileSync(tmp, bytes);
+  renameSync(tmp, target);
+}
+
+async function writeThumb(input, target) {
+  const out = await sharp(input)
+    .resize({ width: THUMB, withoutEnlargement: true })
+    .webp({ quality: THUMB_QUALITY })
+    .toBuffer();
+  writeAtomic(target, out);
+  return out.length;
+}
 
 const readManifest = () => {
   try {
@@ -68,11 +95,9 @@ async function fetchAndConvert(url, target) {
     .webp({ quality: QUALITY })
     .toBuffer();
 
-  // Через временный файл: сервер отдаёт эту папку и не должен встретить половину файла.
-  const tmp = `${target}.tmp`;
-  writeFileSync(tmp, out);
-  renameSync(tmp, target);
-  return { from: input.length, to: out.length };
+  writeAtomic(target, out);
+  const thumb = await writeThumb(out, thumbNameFor(target));
+  return { from: input.length, to: out.length + thumb };
 }
 
 async function main() {
@@ -116,6 +141,44 @@ async function main() {
   );
 
   writeFileSync(MANIFEST, JSON.stringify(manifest));
+
+  /*
+   * Превью для тех снимков, что скачаны прежними запусками: их берём с диска,
+   * заново по сети не ходим. Благодаря этому достаточно просто прогнать
+   * скрипт ещё раз — докачивать 10 000 фотографий второй раз не придётся.
+   */
+  const cached = new Set([...remote].map(nameFor));
+  // Снимки, скачанные прежними запусками, в снапшоте уже записаны как
+  // /media/…: если смотреть только на внешние адреса, их не видно вовсе, и
+  // превью для них никогда бы не появились.
+  for (const p of products) {
+    for (const u of p.images ?? []) {
+      const local = /^\/media\/([a-f0-9]{32}\.webp)$/.exec(u);
+      if (local) cached.add(local[1]);
+    }
+  }
+  const missingThumbs = [...cached].filter(
+    (name) => existsSync(join(DIR, name)) && !existsSync(join(DIR, thumbNameFor(name))),
+  );
+  if (missingThumbs.length) {
+    console.log(`Превью не хватает у ${missingThumbs.length} снимков — делаем из уже скачанных`);
+    const pending = [...missingThumbs];
+    let made = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(PARALLEL, pending.length) }, async () => {
+        for (let name = pending.shift(); name; name = pending.shift()) {
+          try {
+            await writeThumb(readFileSync(join(DIR, name)), join(DIR, thumbNameFor(name)));
+            made += 1;
+            if (made % 500 === 0) console.log(`  превью ${made} из ${missingThumbs.length}`);
+          } catch (e) {
+            if (made < 5) console.log(`  не вышло превью для ${name}: ${e.message}`);
+          }
+        }
+      }),
+    );
+    console.log(`  готово превью: ${made}`);
+  }
 
   // Подменяем в снапшоте только то, что реально лежит на диске: карточка с
   // битой локальной ссылкой хуже карточки с медленной чужой.

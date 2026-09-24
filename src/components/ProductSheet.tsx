@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
-import Img from "./Img";
+import Img, { prefetchImage, thumbOf } from "./Img";
 import { IconBookmark, IconBookmarkFilled, IconCart, IconExternal, IconHeart, IconStar, IconX } from "./Icons";
 import SizeGuide from "./SizeGuide";
 import SizeProfileSheet from "./SizeProfileSheet";
@@ -337,6 +337,12 @@ function Gallery({ images, title }: { images: string[]; title: string }) {
     setIndex(Math.round(el.scrollLeft / el.clientWidth));
   }
 
+  // Соседние кадры подтягиваем заранее: пролистывание не должно упираться в сеть.
+  useEffect(() => {
+    prefetchImage(list[index + 1]);
+    if (index > 0) prefetchImage(list[index - 1]);
+  }, [index, list]);
+
   return (
     <div className="relative bg-[var(--color-surface)]">
       <div
@@ -349,7 +355,9 @@ function Gallery({ images, title }: { images: string[]; title: string }) {
             key={i}
             src={src}
             alt={`${title} — фото ${i + 1}`}
-            eager={i === 0}
+            // Видимый кадр важнее остальных: без подсказки браузер тянет их
+            // всем поровну, и рассматриваемое фото ждёт тех, что за экраном.
+            eager={i === index}
             className="h-full w-full shrink-0 snap-center"
             fallbackLabel={title.slice(0, 60)}
           />
@@ -370,7 +378,7 @@ function Gallery({ images, title }: { images: string[]; title: string }) {
                   i === index ? "border-[var(--color-accent)]" : "border-transparent"
                 }`}
               >
-                <Img src={src} alt="" className="h-full w-full" fallbackLabel="" />
+                <Img src={thumbOf(src)} alt="" className="h-full w-full" fallbackLabel="" />
               </button>
             ))}
           </div>
