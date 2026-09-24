@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { authStore, storageWarning } from "@/lib/auth/store";
-import { clientKey, newUserId, startSession, toPublic, tooManyAttempts, noteFailure } from "@/lib/auth/session";
+import { clientKey, newUserId, tooManyAttempts, noteFailure } from "@/lib/auth/session";
 import { emailProblem, hashPassword, normalizeEmail, passwordProblem } from "@/lib/auth/password";
 import { appUrl, sendMail, verifyEmail } from "@/lib/auth/mail";
 import { issueToken } from "@/lib/auth/tokens";
@@ -65,10 +65,11 @@ export async function POST(req: Request) {
     );
   }
 
-  await startSession(user.id);
-
-  // Письмо шлём после того, как аккаунт уже создан и сессия открыта: упавшая
-  // почта не должна отменять регистрацию, о которой человека уже уведомили.
+  /**
+   * Сессию здесь НЕ открываем: почта должна быть подтверждена до входа. Вход
+   * даёт сама ссылка из письма — так подтверждение нельзя пропустить, и не
+   * приходится вводить пароль второй раз.
+   */
   let mail: string | undefined;
   try {
     const link = `${await appUrl()}/verify?token=${await issueToken("verify", user.id)}`;
@@ -83,5 +84,13 @@ export async function POST(req: Request) {
     mail = e instanceof Error ? e.message : "почта недоступна";
   }
 
-  return NextResponse.json({ user: toPublic(user), warning: storageWarning(), mailProblem: mail });
+  // Учётную запись оставляем даже при упавшей почте: письмо можно выслать
+  // заново, а потерять уже занятый адрес — значит не дать человеку
+  // зарегистрироваться вовсе.
+  return NextResponse.json({
+    pending: true,
+    email: user.email,
+    warning: storageWarning(),
+    mailProblem: mail,
+  });
 }

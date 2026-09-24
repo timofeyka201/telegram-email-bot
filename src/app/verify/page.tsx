@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import AuthPageShell from "@/components/AuthPageShell";
+import { syncOnLogin } from "@/lib/sync";
+import { useStore } from "@/lib/store";
 
 type State = "ready" | "busy" | "done" | "error" | "notoken";
 
@@ -10,6 +12,7 @@ type State = "ready" | "busy" | "done" | "error" | "notoken";
  * антивирусы открывают ссылки сами, и одноразовый токен сгорал бы до человека.
  */
 export default function VerifyPage() {
+  const setAccount = useStore((s) => s.setAccount);
   const [token, setToken] = useState<string | null>(null);
   const [state, setState] = useState<State>("ready");
   const [message, setMessage] = useState<string | null>(null);
@@ -29,13 +32,21 @@ export default function VerifyPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token }),
       });
-      const data = (await res.json()) as { ok?: boolean; email?: string; error?: string };
-      if (!res.ok || !data.ok) {
+      const data = (await res.json()) as {
+        ok?: boolean;
+        user?: { id: string; email: string; name?: string; createdAt: string; emailVerified?: boolean };
+        error?: string;
+      };
+      if (!res.ok || !data.ok || !data.user) {
         setMessage(data.error ?? "Не получилось. Попробуйте ещё раз.");
         setState("error");
         return;
       }
-      setMessage(data.email ?? null);
+      // Подтверждение открыло сессию — значит человек уже вошёл. Забираем то,
+      // что он успел насвайпать до регистрации, и объединяем с аккаунтом.
+      setAccount(data.user);
+      await syncOnLogin().catch(() => undefined);
+      setMessage(data.user.email);
       setState("done");
     } catch {
       setMessage("Сервер не отвечает");
@@ -56,10 +67,10 @@ export default function VerifyPage() {
 
   if (state === "done") {
     return (
-      <AuthPageShell title="Почта подтверждена">
+      <AuthPageShell title="Готово, вы вошли">
         <p className="text-[14px] leading-relaxed text-[var(--color-ink-soft)]">
           {message ? `Адрес ${message} подтверждён. ` : ""}
-          Теперь пароль можно восстановить, если он забудется.
+          Избранное и корзина теперь синхронизируются между устройствами.
         </p>
       </AuthPageShell>
     );

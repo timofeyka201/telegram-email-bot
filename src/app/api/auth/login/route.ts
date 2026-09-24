@@ -43,6 +43,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Неверная почта или пароль" }, { status: 401 });
   }
 
+  // Пароль верный, но почта не подтверждена. Отвечаем отдельным кодом, чтобы
+  // форма предложила выслать письмо заново, а не твердила «неверный пароль».
+  if (!user.emailVerified) {
+    clearFailures(key);
+    return NextResponse.json(
+      { error: "Почта не подтверждена. Мы отправили письмо со ссылкой — перейдите по ней.", unverified: true },
+      { status: 403 },
+    );
+  }
+
   clearFailures(key);
   await startSession(user.id);
   return NextResponse.json({ user: toPublic(user) });

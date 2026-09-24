@@ -6,6 +6,7 @@ import { Mark } from "./Brand";
 import { toast } from "./Toast";
 import { syncOnLogin } from "@/lib/sync";
 import { useStore } from "@/lib/store";
+import { PASSWORD_RULE, passwordProblem } from "@/lib/auth/rules";
 
 type Mode = "login" | "register" | "forgot";
 
@@ -19,7 +20,10 @@ export default function AuthSheet({ open, onClose }: { open: boolean; onClose: (
   const [mode, setMode] = useState<Mode>("register");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [repeat, setRepeat] = useState("");
   const [name, setName] = useState("");
+  /** Адрес, на который ушло письмо. Пока он есть — показываем экран ожидания. */
+  const [awaiting, setAwaiting] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
@@ -30,6 +34,8 @@ export default function AuthSheet({ open, onClose }: { open: boolean; onClose: (
       setError(null);
       setNote(null);
       setPassword("");
+      setRepeat("");
+      setAwaiting(null);
     }
   }, [open]);
 
@@ -56,9 +62,40 @@ export default function AuthSheet({ open, onClose }: { open: boolean; onClose: (
     }
   }
 
+  /** Выслать письмо ещё раз — работает и до входа. */
+  async function resend(address: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/auth/verify/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: address }),
+      });
+      const data = (await res.json()) as { ok?: boolean; message?: string; error?: string };
+      if (!res.ok || !data.ok) setError(data.error ?? "Не получилось отправить письмо.");
+      else setNote(data.message ?? "Письмо отправлено ещё раз.");
+    } catch {
+      setError("Сервер не отвечает");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submit() {
     if (busy) return;
     if (mode === "forgot") return requestReset();
+    if (mode === "register") {
+      const bad = passwordProblem(password);
+      if (bad) {
+        setError(bad);
+        return;
+      }
+      if (password !== repeat) {
+        setError("Пароли не совпадают");
+        return;
+      }
+    }
 
     setBusy(true);
     setError(null);
@@ -70,37 +107,102 @@ export default function AuthSheet({ open, onClose }: { open: boolean; onClose: (
       });
       const data = (await res.json()) as {
         user?: { id: string; email: string; name?: string; createdAt: string; emailVerified?: boolean };
+        pending?: boolean;
+        email?: string;
         error?: string;
+        unverified?: boolean;
         warning?: string | null;
         mailProblem?: string;
       };
+
+      // Вход при неподтверждённой почте: показываем тот же экран ожидания, что
+      // и после регистрации, — с кнопкой выслать письмо заново.
+      if (res.status === 403 && data.unverified) {
+        setAwaiting(email);
+        setNote(data.error ?? "Почта не подтверждена.");
+        return;
+      }
+
+      // Регистрация сессию не открывает: до подтверждения входить некуда.
+      if (data.pending) {
+        setAwaiting(data.email ?? email);
+        if (data.warning) setWarning(data.warning);
+        setNote(
+          data.mailProblem
+            ? `Аккаунт создан, но письмо отправить не удалось: ${data.mailProblem}. Попробуйте выслать ещё раз.`
+            : null,
+        );
+        return;
+      }
+
       if (!res.ok || !data.user) {
         setError(data.error ?? "Не получилось. Попробуйте ещё раз.");
         return;
       }
+
       setAccount(data.user);
       if (data.warning) setWarning(data.warning);
       // Первый вход на устройстве: объединяем локальное с тем, что в аккаунте.
       const outcome = await syncOnLogin();
-      toast(
-        outcome === "merged" ? "Данные аккаунта подтянулись" : mode === "register" ? "Аккаунт создан" : "С возвращением",
-        "like",
-      );
-      if (mode === "register") {
-        // Молча проглотить несработавшую почту нельзя: человек будет ждать письмо.
-        setNote(
-          data.mailProblem
-            ? "Аккаунт создан, но письмо с подтверждением отправить не удалось. Подтвердить почту можно позже из настроек."
-            : `Письмо с подтверждением отправлено на ${data.user.email}. Проверьте и папку со спамом.`,
-        );
-        return;
-      }
+      toast(outcome === "merged" ? "Данные аккаунта подтянулись" : "С возвращением", "like");
       if (!data.warning) onClose();
     } catch {
       setError("Сервер не отвечает");
     } finally {
       setBusy(false);
     }
+  }
+
+  // Письмо ушло — формы больше не нужно, нужна одна понятная инструкция.
+  if (awaiting) {
+    return (
+      <Sheet open={open} title="Подтвердите почту" onClose={onClose}>
+        <div className="mb-4 flex items-center gap-3 rounded-2xl bg-[var(--color-brand-soft)] px-4 py-3.5">
+          <Mark className="h-8 w-8 shrink-0" id="auth-mark" />
+          <p className="text-[13px] leading-snug text-[var(--color-ink-soft)]">
+            Мы отправили письмо на <b className="break-all">{awaiting}</b>. Перейдите по ссылке из него — она
+            и выполнит вход.
+          </p>
+        </div>
+
+        <p className="mb-4 text-[13px] leading-relaxed text-[var(--color-muted)]">
+          Письма нет? Загляните в папку со спамом — новые адреса туда попадают чаще обычного.
+        </p>
+
+        {error && (
+          <p className="mb-3 rounded-2xl bg-[var(--color-nope-soft)] px-4 py-3 text-[13px] leading-snug text-[var(--color-nope)]">
+            {error}
+          </p>
+        )}
+        {note && (
+          <p className="mb-3 rounded-2xl bg-[var(--color-like-soft)] px-4 py-3 text-[13px] leading-snug text-[var(--color-ink-soft)]">
+            {note}
+          </p>
+        )}
+
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void resend(awaiting)}
+          className="brand-gradient w-full rounded-2xl py-3.5 text-[15px] font-bold text-white disabled:opacity-50"
+        >
+          {busy ? "Отправляем…" : "Выслать письмо ещё раз"}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setAwaiting(null);
+            setNote(null);
+            setError(null);
+            setMode("login");
+          }}
+          className="mt-3 w-full py-2 text-[13px] font-semibold text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+        >
+          Указать другой адрес
+        </button>
+      </Sheet>
+    );
   }
 
   return (
@@ -184,7 +286,7 @@ export default function AuthSheet({ open, onClose }: { open: boolean; onClose: (
         {mode !== "forgot" && (
           <label className="soft-shadow flex flex-col rounded-2xl bg-[var(--color-surface)] px-4 py-2.5">
             <span className="text-[12px] font-semibold text-[var(--color-muted)]">
-              Пароль{mode === "register" ? " · от 8 символов" : ""}
+              Пароль{mode === "register" ? ` · ${PASSWORD_RULE}` : ""}
             </span>
             <input
               type="password"
@@ -195,6 +297,23 @@ export default function AuthSheet({ open, onClose }: { open: boolean; onClose: (
               minLength={mode === "register" ? 8 : undefined}
               className="bg-transparent py-1 text-[15px] outline-none"
             />
+          </label>
+        )}
+
+        {mode === "register" && (
+          <label className="soft-shadow flex flex-col rounded-2xl bg-[var(--color-surface)] px-4 py-2.5">
+            <span className="text-[12px] font-semibold text-[var(--color-muted)]">Пароль ещё раз</span>
+            <input
+              type="password"
+              required
+              value={repeat}
+              onChange={(e) => setRepeat(e.target.value)}
+              autoComplete="new-password"
+              className="bg-transparent py-1 text-[15px] outline-none"
+            />
+            {repeat && password !== repeat && (
+              <span className="pb-0.5 text-[12px] text-[var(--color-nope)]">Пароли не совпадают</span>
+            )}
           </label>
         )}
 

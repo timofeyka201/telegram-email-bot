@@ -23,7 +23,6 @@ const MAXMEM = 128 * PARAMS.N * PARAMS.r * 2;
 const KEYLEN = 32;
 const SALT_BYTES = 16;
 
-export const MIN_PASSWORD = 8;
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(SALT_BYTES);
@@ -50,22 +49,5 @@ export async function verifyPassword(password: string, stored: string): Promise<
   }
 }
 
-/** Что именно не так с паролем — чтобы не отвечать «неверный формат». */
-export function passwordProblem(password: string): string | null {
-  if (password.length < MIN_PASSWORD) return `Пароль короче ${MIN_PASSWORD} символов`;
-  if (password.length > 200) return "Пароль слишком длинный";
-  if (!/[^\s]/.test(password)) return "Пароль не может состоять из пробелов";
-  return null;
-}
-
-export function normalizeEmail(raw: string): string {
-  return raw.trim().toLowerCase();
-}
-
-export function emailProblem(email: string): string | null {
-  if (!email) return "Укажите почту";
-  if (email.length > 254) return "Адрес слишком длинный";
-  // Проверка намеренно мягкая: строгая регулярка отсекает валидные адреса.
-  if (!/^[^\s@]+@[^\s@.]+\.[^\s@]+$/.test(email)) return "Похоже, в адресе опечатка";
-  return null;
-}
+// Правила лежат отдельно: их применяет и браузер, а сюда тянется node:crypto.
+export { MIN_PASSWORD, PASSWORD_RULE, emailProblem, normalizeEmail, passwordProblem } from "./rules";
