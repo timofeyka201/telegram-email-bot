@@ -9,10 +9,10 @@ import Img from "@/components/Img";
 import ProductSheet from "@/components/ProductSheet";
 import Sheet from "@/components/Sheet";
 import WishCardForm from "@/components/WishCardForm";
-import { IconBookmark, IconCheck, IconExternal, IconGear, IconSearch, IconShare, IconTrash } from "@/components/Icons";
+import { IconBookmark, IconCheck, IconCopy, IconGear, IconPlus, IconSearch, IconShare, IconTrash } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { useHydrated, useStore } from "@/lib/store";
-import { formatNative, formatRub, needsConversion, plural } from "@/lib/money";
+import { formatRub, plural } from "@/lib/money";
 import { loadMyWishlist, loadReservations, removeItem, saveWishlistSettings } from "@/lib/wish/client";
 import { formatCode, MAX_NOTE, MAX_TITLE, normalizeCode, type OwnerItem, type OwnerView, type ReservedEntry } from "@/lib/wish/types";
 import type { Product } from "@/lib/types";
@@ -61,8 +61,8 @@ export default function WishlistPage() {
   return (
     <div className="flex flex-1 flex-col">
       <header className="safe-top sticky top-0 z-30 min-w-0 border-b border-[var(--color-line)] bg-[var(--color-surface)]/92 backdrop-blur-md">
-        <div className="flex items-baseline justify-between gap-3 px-4 pb-2 pt-3">
-          <h1 className="truncate font-display text-[20px] font-bold">{view?.title ?? "Вишлист"}</h1>
+        <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-3">
+          <h1 className="truncate font-display text-[28px] leading-none">{view?.title ?? "Вишлист"}</h1>
           {account && view && (
             <button
               type="button"
@@ -76,7 +76,7 @@ export default function WishlistPage() {
         </div>
 
         {account && (
-          <div className="mx-4 mb-2 flex rounded-full bg-[var(--color-surface-2)] p-1">
+          <div className="mx-4 mb-2 grid grid-cols-2 gap-1 rounded-full bg-[var(--color-surface-2)] p-1">
             {(
               [
                 ["mine", "Мой список", view?.items.length ?? 0],
@@ -88,8 +88,10 @@ export default function WishlistPage() {
                 type="button"
                 onClick={() => setTab(id)}
                 aria-pressed={tab === id}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-full py-2 text-[13px] font-bold transition-colors ${
-                  tab === id ? "bg-[var(--color-surface)] text-[var(--color-ink)] soft-shadow" : "text-[var(--color-muted)]"
+                className={`flex items-center justify-center gap-1.5 rounded-full py-2 text-[14px] transition-colors ${
+                  tab === id
+                    ? "bg-[var(--color-surface)] font-bold text-[var(--color-ink)] soft-shadow"
+                    : "font-semibold text-[var(--color-muted)]"
                 }`}
               >
                 {label}
@@ -116,30 +118,40 @@ export default function WishlistPage() {
           <>
             <ShareBlock view={view} />
 
-            <button
-              type="button"
-              onClick={() => {
-                setEditing(null);
-                setFormOpen(true);
-              }}
-              className="flex items-center justify-center gap-2 rounded-3xl border border-dashed border-[var(--color-line)] bg-[var(--color-surface)] py-4 text-[14px] font-bold text-[var(--color-brand)]"
-            >
-              + Добавить своё желание
-            </button>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[18px] font-extrabold">
+                {view.items.length} {plural(view.items.length, "желание", "желания", "желаний")}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(null);
+                  setFormOpen(true);
+                }}
+                className="flex h-11 shrink-0 items-center gap-1.5 rounded-full border-2 border-[var(--color-ink)] pl-3 pr-4 text-[14px] font-bold"
+              >
+                <IconPlus className="h-[18px] w-[18px]" />
+                Своё желание
+              </button>
+            </div>
 
             {view.items.length === 0 ? (
               <EmptyMine />
             ) : (
-              <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <AnimatePresence initial={false}>
                   {view.items.map((item) => (
-                    <MyItem
+                    <WishTile
                       key={item.id}
                       item={item}
-                      onOpen={() => item.product && setSheet(item.product)}
-                      onEdit={() => {
-                        setEditing(item);
-                        setFormOpen(true);
+                      onOpen={() => {
+                        // Карточка из ленты открывает тот же экран товара, что и лента;
+                        // своя — форму, в которой её и заводили.
+                        if (item.product) setSheet(item.product);
+                        else {
+                          setEditing(item);
+                          setFormOpen(true);
+                        }
                       }}
                       onRemove={async () => {
                         const next = await removeItem(item.id);
@@ -218,7 +230,7 @@ function FindByCode() {
         <button
           type="submit"
           aria-label="Найти"
-          className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-2xl bg-[var(--color-brand)] text-white"
+          className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-2xl bg-[var(--color-brand)] on-accent"
         >
           <IconSearch className="h-5 w-5" />
         </button>
@@ -253,112 +265,102 @@ function ShareBlock({ view }: { view: OwnerView }) {
   }
 
   return (
-    <div className="soft-shadow rounded-3xl bg-[var(--color-surface)] p-4">
-      <p className="text-[13px] font-bold">Код списка</p>
-      <p className="tnum mt-1 font-display text-[26px] font-bold tracking-[0.12em] text-[var(--color-brand)]">
-        {formatCode(view.code)}
-      </p>
-      <p className="mt-1 text-[12px] leading-snug text-[var(--color-muted)]">
+    <div className="on-accent flex flex-col gap-3 rounded-[28px] bg-[var(--color-like)] px-5 pb-5 pt-[18px]">
+      <span className="flex items-center gap-1.5 text-[13px] font-bold">
+        <IconBookmark className="h-[18px] w-[18px]" />
+        Код для друзей
+      </span>
+      <span className="tnum font-display text-[34px] leading-none tracking-[0.02em]">{formatCode(view.code)}</span>
+      <p className="text-[12px] leading-snug opacity-70">
         {view.shared
           ? "Продиктуйте код или отправьте ссылку. Брони друзей вам не видны — сюрприз останется сюрпризом."
           : "Доступ по ссылке выключен: сейчас список никто, кроме вас, не откроет."}
       </p>
-      <div className="mt-3 flex gap-2">
+      <div className="flex gap-2">
         <button
           type="button"
           onClick={share}
-          className="brand-gradient flex flex-1 items-center justify-center gap-2 rounded-2xl py-2.5 text-[14px] font-bold text-white"
+          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-[var(--color-ink)] text-[15px] font-bold text-[var(--color-surface)]"
         >
-          <IconShare className="h-4 w-4" />
+          <IconShare className="h-5 w-5" />
           Поделиться
         </button>
         <button
           type="button"
           onClick={copy}
-          className="flex shrink-0 items-center gap-1.5 rounded-2xl bg-[var(--color-surface-2)] px-4 py-2.5 text-[14px] font-bold text-[var(--color-ink-soft)]"
+          aria-label="Копировать ссылку"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-[2.5px] border-current"
         >
-          {copied ? <IconCheck className="h-4 w-4" /> : null}
-          {copied ? "Скопировано" : "Копировать"}
+          {copied ? <IconCheck className="h-5 w-5" /> : <IconCopy className="h-5 w-5" />}
         </button>
       </div>
     </div>
   );
 }
 
-function MyItem({
-  item,
-  onOpen,
-  onEdit,
-  onRemove,
-}: {
-  item: OwnerItem;
-  onOpen: () => void;
-  onEdit: () => void;
-  onRemove: () => void;
-}) {
+/**
+ * Плитка желания. Сетка из двух колонок, а не список строк: вишлист смотрят
+ * целиком и глазами, а не вычитывают построчно, и своя карточка без фотографии
+ * в такой сетке выглядит равноправной, а не обрубком.
+ */
+function WishTile({ item, onOpen, onRemove }: { item: OwnerItem; onOpen: () => void; onRemove: () => void }) {
   const rates = useStore((s) => s.rates);
+  const own = item.source === "custom";
+
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.96 }}
+      initial={{ opacity: 0, scale: 0.94 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9 }}
       transition={{ type: "spring", stiffness: 380, damping: 32 }}
-      className="soft-shadow flex gap-3 overflow-hidden rounded-3xl bg-[var(--color-surface)] p-3"
+      className="relative flex flex-col gap-2"
     >
-      <button
-        type="button"
-        onClick={item.product ? onOpen : undefined}
-        className="h-[92px] w-[92px] shrink-0 overflow-hidden rounded-2xl"
-        aria-label={item.product ? "Открыть карточку" : undefined}
-      >
-        <Img src={item.image} alt={item.title} className="h-full w-full" fallbackLabel={item.title.slice(0, 24)} />
+      <button type="button" onClick={onOpen} className="block text-left">
+        {item.image ? (
+          <Img
+            src={item.image}
+            alt={item.title}
+            className="h-[170px] w-full rounded-[var(--radius-tile)]"
+            fallbackLabel={item.title.slice(0, 24)}
+          />
+        ) : (
+          <span className="flex h-[170px] w-full flex-col justify-between rounded-[var(--radius-tile)] border-2 border-dashed border-[var(--color-brand)] bg-[var(--color-brand-soft)] p-3.5">
+            <span className="on-accent self-start rounded-full bg-[var(--color-brand)] px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-[0.04em]">
+              Своё
+            </span>
+            <span className="line-clamp-3 font-display text-[18px] leading-[1.15] text-[var(--color-ink)]">
+              {item.title}
+            </span>
+          </span>
+        )}
       </button>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <p className="line-clamp-2 text-[14px] font-semibold leading-tight">{item.title}</p>
-        {item.price !== undefined && (
-          <p className="tnum mt-1 font-display text-[16px] font-bold leading-none">
-            {formatRub(item.price, item.currency, rates)}
-            {needsConversion(item.currency) && (
-              <span className="ml-1.5 text-[12px] font-medium text-[var(--color-muted)]">
-                {formatNative(item.price, item.currency)}
-              </span>
-            )}
-          </p>
-        )}
-        {item.note && (
-          <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-[var(--color-muted)]">{item.note}</p>
-        )}
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label="Убрать из вишлиста"
+        className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-surface)]/90 text-[var(--color-muted)] backdrop-blur soft-shadow"
+      >
+        <IconTrash className="h-4 w-4" />
+      </button>
 
-        <div className="mt-auto flex items-center gap-1.5 pt-2">
-          <button
-            type="button"
-            onClick={onEdit}
-            className="rounded-xl bg-[var(--color-surface-2)] px-3 py-1.5 text-[12px] font-bold text-[var(--color-ink-soft)]"
-          >
-            {item.note ? "Изменить" : "Добавить пожелание"}
-          </button>
-          {item.url && (
-            <a
-              href={item.url}
-              target="_blank"
-              rel="noreferrer noopener"
-              aria-label="Открыть в магазине"
-              className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--color-surface-2)] text-[var(--color-muted)]"
-            >
-              <IconExternal className="h-4 w-4" />
-            </a>
+      <p className="line-clamp-2 text-[14px] font-semibold leading-[1.3]">{item.title}</p>
+      {item.note && <p className="line-clamp-2 text-[12px] leading-snug text-[var(--color-muted)]">{item.note}</p>}
+      <div className="mt-auto flex items-center justify-between gap-2">
+        <span className="tnum text-[16px] font-extrabold">
+          {item.price === undefined ? (
+            <span className="text-[14px] font-semibold text-[var(--color-muted)]">Цена не указана</span>
+          ) : (
+            formatRub(item.price, item.currency, rates)
           )}
-          <button
-            type="button"
-            onClick={onRemove}
-            aria-label="Убрать из вишлиста"
-            className="ml-auto flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--color-surface-2)] text-[var(--color-muted)]"
-          >
-            <IconTrash className="h-4 w-4" />
-          </button>
-        </div>
+        </span>
+        {/* Карточка без фотографии и так помечена крупно — второй раз незачем. */}
+        {own && item.image && (
+          <span className="shrink-0 rounded-full bg-[var(--color-surface-2)] px-2 py-0.5 text-[11px] font-bold text-[var(--color-muted)]">
+            своё
+          </span>
+        )}
       </div>
     </motion.div>
   );
@@ -410,7 +412,7 @@ function SettingsSheetInner({
               onClose();
             } else toast("Не получилось сохранить");
           }}
-          className="brand-gradient w-full rounded-2xl py-3.5 text-[15px] font-bold text-white disabled:opacity-60"
+          className="brand-gradient w-full rounded-full py-3.5 text-[15px] font-bold disabled:opacity-60"
         >
           {busy ? "Сохраняем…" : "Сохранить"}
         </button>
@@ -505,7 +507,7 @@ function EmptyMine() {
       <p className="mt-1.5 text-[13px] leading-snug text-[var(--color-muted)]">
         Нажимайте закладку на карточке товара в ленте — или добавьте своё желание с любой другой ссылкой.
       </p>
-      <Link href="/" className="brand-gradient mt-4 inline-block rounded-2xl px-6 py-3 text-[14px] font-bold text-white">
+      <Link href="/" className="brand-gradient mt-4 inline-block rounded-full px-6 py-3 text-[14px] font-bold">
         В ленту
       </Link>
     </div>
@@ -524,7 +526,7 @@ function GuestBlock({ count, onLogin }: { count: number; onLogin: () => void }) 
       <button
         type="button"
         onClick={onLogin}
-        className="brand-gradient mt-4 rounded-2xl px-6 py-3 text-[14px] font-bold text-white"
+        className="brand-gradient mt-4 rounded-full px-6 py-3 text-[14px] font-bold"
       >
         Войти или зарегистрироваться
       </button>

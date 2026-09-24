@@ -25,7 +25,7 @@ const SORTS: [Sort, string][] = [
 export default function LikesPage() {
   const hydrated = useHydrated();
   const liked = useStore((s) => s.liked);
-  const wishlist = useStore((s) => s.wishlist);
+  const wishCount = useStore((s) => s.wishTotal ?? s.wishlist.length);
   const drops = useStore((s) => s.drops);
   const cart = useStore((s) => s.cart);
   const rates = useStore((s) => s.rates);
@@ -59,9 +59,9 @@ export default function LikesPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <header className="safe-top sticky top-0 z-30 min-w-0 border-b border-[var(--color-line)] bg-[var(--color-surface)]/92 backdrop-blur-md">
-        <div className="flex items-baseline justify-between px-4 pb-2 pt-3">
-          <h1 className="font-display text-[20px] font-bold">Избранное</h1>
+      <header className="safe-top sticky top-0 z-30 min-w-0 bg-[var(--color-bg)]/92 backdrop-blur-md">
+        <div className="flex items-center justify-between px-4 pb-2 pt-3">
+          <h1 className="font-display text-[28px] leading-none">Избранное</h1>
           <span className="tnum text-[13px] text-[var(--color-muted)]">
             {source.length} {plural(source.length, "товар", "товара", "товаров")}
           </span>
@@ -69,11 +69,11 @@ export default function LikesPage() {
 
         <Link
           href="/wishlist"
-          className="mx-4 mb-2 flex items-center gap-2 rounded-2xl bg-[var(--color-brand-soft)] px-4 py-2.5 text-[13px] font-bold text-[var(--color-brand)]"
+          className="mx-4 mb-2 flex items-center gap-2 rounded-full bg-[var(--color-brand-soft)] px-4 py-2.5 text-[13px] font-bold text-[var(--color-brand)]"
         >
           <IconBookmark className="h-4 w-4 shrink-0" />
           <span className="min-w-0 flex-1 truncate">
-            Вишлист{wishlist.length > 0 && <span className="tnum opacity-70"> · {wishlist.length}</span>}
+            Вишлист{wishCount > 0 && <span className="tnum opacity-70"> · {wishCount}</span>}
           </span>
           <span className="shrink-0 font-medium opacity-70">поделиться и принять брони</span>
         </Link>
@@ -179,7 +179,7 @@ export default function LikesPage() {
                           addToCart(p);
                           toast("В корзине", "like");
                         }}
-                        className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-[var(--color-brand)] py-2 text-[12px] font-bold text-white disabled:bg-[var(--color-surface-2)] disabled:text-[var(--color-muted)]"
+                        className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-[var(--color-brand)] py-2 text-[12px] font-bold on-accent disabled:bg-[var(--color-surface-2)] disabled:text-[var(--color-muted)]"
                       >
                         <IconCart className="h-4 w-4" />
                         {inCart ? "В корзине" : "В корзину"}
@@ -210,7 +210,7 @@ export default function LikesPage() {
                   notInCart.forEach((p) => addToCart(p));
                   toast(`${notInCart.length} ${plural(notInCart.length, "товар", "товара", "товаров")} в корзине`, "like");
                 }}
-                className="brand-gradient pop-shadow flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-[15px] font-bold text-white"
+                className="brand-gradient pop-shadow flex w-full items-center justify-center gap-2 rounded-full py-3.5 text-[15px] font-bold"
               >
                 <IconCart className="h-5 w-5" />
                 Всё в корзину · {notInCart.length}
@@ -237,7 +237,7 @@ function Empty() {
           Свайпайте карточки вправо — понравившееся будет собираться здесь.
         </p>
       </div>
-      <Link href="/" className="brand-gradient rounded-2xl px-6 py-3 text-[15px] font-bold text-white">
+      <Link href="/" className="brand-gradient rounded-full px-6 py-3 text-[15px] font-bold">
         В ленту
       </Link>
     </div>

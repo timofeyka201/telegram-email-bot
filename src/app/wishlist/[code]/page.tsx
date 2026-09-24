@@ -75,7 +75,7 @@ export default function FriendWishlistPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <header className="safe-top sticky top-0 z-30 border-b border-[var(--color-line)] bg-[var(--color-surface)]/92 px-4 pb-3 pt-3 backdrop-blur-md">
+      <header className="safe-top sticky top-0 z-30 bg-[var(--color-bg)]/92 px-4 pb-3 pt-3 backdrop-blur-md">
         <div className="flex items-center gap-2">
           <Link
             href="/wishlist"
@@ -85,7 +85,7 @@ export default function FriendWishlistPage() {
             <IconArrowLeft className="h-4 w-4" />
           </Link>
           <div className="min-w-0">
-            <h1 className="truncate font-display text-[18px] font-bold leading-tight">
+            <h1 className="truncate font-display text-[22px] leading-tight">
               {view?.title ?? "Вишлист"}
             </h1>
             <p className="truncate text-[12px] text-[var(--color-muted)]">
@@ -104,7 +104,7 @@ export default function FriendWishlistPage() {
             <p className="mt-1.5 text-[13px] leading-snug text-[var(--color-muted)]">{error}</p>
             <Link
               href="/wishlist"
-              className="brand-gradient mt-4 inline-block rounded-2xl px-6 py-3 text-[14px] font-bold text-white"
+              className="brand-gradient mt-4 inline-block rounded-full px-6 py-3 text-[14px] font-bold"
             >
               К своему вишлисту
             </Link>
@@ -202,7 +202,7 @@ function GiftCard({
               className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] font-bold disabled:opacity-60 ${
                 item.mine
                   ? "bg-[var(--color-like-soft)] text-[var(--color-like)]"
-                  : "bg-[var(--color-brand)] text-white"
+                  : "bg-[var(--color-brand)] on-accent"
               }`}
             >
               {item.mine ? <IconCheck className="h-3.5 w-3.5" /> : <IconGift className="h-3.5 w-3.5" />}

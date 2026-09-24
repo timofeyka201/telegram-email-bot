@@ -7,37 +7,42 @@
    ========================================================================== */
 
 @theme {
-  --font-sans: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-display: "Unbounded", "Manrope", -apple-system, sans-serif;
-  --radius-card: 28px;
+  --font-sans: "Onest", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Dela Gothic One", "Onest", -apple-system, sans-serif;
+  --radius-card: 32px;
+  --radius-tile: 20px;
+  --radius-pill: 999px;
 }
 
 :root {
   color-scheme: light;
 
-  --color-bg: #f5f4fa;
+  --color-bg: #eceef2;
   --color-surface: #ffffff;
-  --color-surface-2: #f1f0f7;
-  --color-ink: #15141c;
-  --color-ink-soft: #3a3848;
-  --color-muted: #6f6d80;
-  --color-line: #e6e4f0;
+  --color-surface-2: #f2f3f6;
+  --color-ink: #15161a;
+  --color-ink-soft: #3a3d45;
+  --color-muted: #666b76;
+  --color-line: #dde0e6;
 
-  --color-brand: #5b3df5;
-  --color-brand-2: #9b6bff;
+  --color-brand: #ff5b2e;
+  --color-brand-2: #c6f135;
   --color-brand-ink: #ffffff;
-  --color-brand-soft: #efecff;
+  --color-brand-soft: #ffe4d8;
+  /* Заливки здесь яркие, а не тёмные: белый текст на них не читается.
+     Всё, что лежит на brand, like и super, красится этим цветом. */
+  --color-on-accent: #15161a;
 
-  --color-like: #12b886;
-  --color-like-soft: #e3f8f1;
-  --color-nope: #ff4757;
-  --color-nope-soft: #ffecee;
-  --color-super: #ffb020;
-  --color-super-soft: #fff4e0;
+  --color-like: #c6f135;
+  --color-like-soft: #eef9cc;
+  --color-nope: #e8364f;
+  --color-nope-soft: #fde3e7;
+  --color-super: #ff5b2e;
+  --color-super-soft: #ffe4d8;
 
-  --shadow-card: 0 2px 6px rgba(21, 20, 28, .06), 0 18px 44px rgba(45, 33, 120, .14);
-  --shadow-soft: 0 1px 2px rgba(21, 20, 28, .05), 0 6px 18px rgba(45, 33, 120, .08);
-  --shadow-pop: 0 10px 30px rgba(45, 33, 120, .22);
+  --shadow-card: 0 10px 24px -14px rgba(20, 22, 28, .28);
+  --shadow-soft: 0 1px 2px rgba(20, 22, 28, .06);
+  --shadow-pop: 0 2px 6px -2px rgba(20, 22, 28, .2);
 
   --ring: 0 0 0 3px color-mix(in srgb, var(--color-brand) 35%, transparent);
 }
@@ -46,56 +51,60 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --color-bg: #0f0e15;
-    --color-surface: #1a1925;
-    --color-surface-2: #23222f;
-    --color-ink: #f2f1f7;
-    --color-ink-soft: #cfcddd;
-    --color-muted: #9a98ac;
-    --color-line: #2c2a3a;
+    --color-bg: #111215;
+    --color-surface: #1b1c21;
+    --color-surface-2: #25272d;
+    --color-ink: #f3f4f6;
+    --color-ink-soft: #d3d6dc;
+    --color-muted: #9a9ea8;
+    --color-line: #30333a;
 
-    --color-brand: #7c5cff;
-    --color-brand-2: #a98bff;
-    --color-brand-soft: #241f3d;
+    --color-brand: #ff7048;
+    --color-brand-2: #d2fa4a;
+    --color-brand-soft: #3a2119;
+    /* Заливки и в тёмной теме остаются светлыми, поэтому текст на них тёмный. */
+    --color-on-accent: #15161a;
 
-    --color-like: #1fcf99;
-    --color-like-soft: #122c26;
-    --color-nope: #ff5c6a;
-    --color-nope-soft: #2e1720;
-    --color-super: #ffc04d;
-    --color-super-soft: #302510;
+    --color-like: #c9f53f;
+    --color-like-soft: #283110;
+    --color-nope: #ff5d73;
+    --color-nope-soft: #3d1c24;
+    --color-super: #ff7048;
+    --color-super-soft: #3a2119;
 
-    --shadow-card: 0 2px 6px rgba(0, 0, 0, .5), 0 18px 44px rgba(0, 0, 0, .55);
-    --shadow-soft: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 18px rgba(0, 0, 0, .35);
-    --shadow-pop: 0 10px 30px rgba(0, 0, 0, .5);
+    --shadow-card: 0 10px 24px -14px rgba(0, 0, 0, .6);
+    --shadow-soft: 0 1px 2px rgba(0, 0, 0, .3);
+    --shadow-pop: 0 2px 6px -2px rgba(0, 0, 0, .5);
   }
 }
 
 /* Явный выбор пользователя перекрывает системную тему в обе стороны */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --color-bg: #0f0e15;
-  --color-surface: #1a1925;
-  --color-surface-2: #23222f;
-  --color-ink: #f2f1f7;
-  --color-ink-soft: #cfcddd;
-  --color-muted: #9a98ac;
-  --color-line: #2c2a3a;
+  --color-bg: #111215;
+  --color-surface: #1b1c21;
+  --color-surface-2: #25272d;
+  --color-ink: #f3f4f6;
+  --color-ink-soft: #d3d6dc;
+  --color-muted: #9a9ea8;
+  --color-line: #30333a;
 
-  --color-brand: #7c5cff;
-  --color-brand-2: #a98bff;
-  --color-brand-soft: #241f3d;
+  --color-brand: #ff7048;
+  --color-brand-2: #d2fa4a;
+  --color-brand-soft: #3a2119;
+  /* Заливки и в тёмной теме остаются светлыми, поэтому текст на них тёмный. */
+  --color-on-accent: #15161a;
 
-  --color-like: #1fcf99;
-  --color-like-soft: #122c26;
-  --color-nope: #ff5c6a;
-  --color-nope-soft: #2e1720;
-  --color-super: #ffc04d;
-  --color-super-soft: #302510;
+  --color-like: #c9f53f;
+  --color-like-soft: #283110;
+  --color-nope: #ff5d73;
+  --color-nope-soft: #3d1c24;
+  --color-super: #ff7048;
+  --color-super-soft: #3a2119;
 
-  --shadow-card: 0 2px 6px rgba(0, 0, 0, .5), 0 18px 44px rgba(0, 0, 0, .55);
-  --shadow-soft: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 18px rgba(0, 0, 0, .35);
-  --shadow-pop: 0 10px 30px rgba(0, 0, 0, .5);
+  --shadow-card: 0 10px 24px -14px rgba(0, 0, 0, .6);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, .3);
+  --shadow-pop: 0 2px 6px -2px rgba(0, 0, 0, .5);
 }
 
 * {
@@ -112,7 +121,6 @@ body {
   background: var(--color-bg);
   color: var(--color-ink);
   font-family: var(--font-sans);
-  font-feature-settings: "ss01", "cv01";
   overscroll-behavior-y: none;
 }
 
@@ -120,12 +128,19 @@ body {
 :focus-visible {
   outline: none;
   box-shadow: var(--ring);
-  border-radius: 12px;
+  border-radius: 14px;
 }
 
+/*
+ * У Dela Gothic One ровно одно начертание. font-weight здесь задан намеренно и
+ * перебивает font-bold из разметки: без этого браузер «жирнит» шрифт сам, и
+ * буквы плывут. Правило вне слоя utilities, поэтому выигрывает у Tailwind.
+ */
 .font-display {
   font-family: var(--font-display);
-  letter-spacing: -0.02em;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  font-synthesis-weight: none;
 }
 
 .tnum {
@@ -197,8 +212,20 @@ body {
 .soft-shadow { box-shadow: var(--shadow-soft); }
 .pop-shadow { box-shadow: var(--shadow-pop); }
 
+/*
+ * Прежде это был градиент под белый текст. Теперь заливка плоская и яркая,
+ * поэтому цвет текста задан здесь же: иначе каждая кнопка в разметке помнила
+ * бы про него сама, и одна забытая осталась бы белым по кораллу.
+ */
 .brand-gradient {
-  background-image: linear-gradient(135deg, var(--color-brand) 0%, var(--color-brand-2) 100%);
+  background-image: none;
+  background-color: var(--color-brand);
+  color: var(--color-on-accent);
+}
+
+/* Текст и иконки на любой яркой заливке: brand, like, super. */
+.on-accent {
+  color: var(--color-on-accent);
 }
 
 .no-scrollbar::-webkit-scrollbar { display: none; }

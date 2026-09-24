@@ -11,24 +11,26 @@ type Props = {
   disabled?: boolean;
 };
 
+/**
+ * Четыре решения разного веса, и размер кнопки об этом говорит: «в корзину» —
+ * самая крупная и единственная с тенью, «отмена» — самая тихая. Заливки яркие,
+ * поэтому иконки на них тёмные (см. --color-on-accent).
+ */
 function Btn({
   label,
   hint,
   onClick,
   disabled,
-  size = "lg",
-  tone,
+  className,
   children,
 }: {
   label: string;
   hint?: string;
   onClick: () => void;
   disabled?: boolean;
-  size?: "sm" | "md" | "lg";
-  tone: string;
+  className: string;
   children: React.ReactNode;
 }) {
-  const dims = size === "lg" ? "h-[68px] w-[68px]" : size === "md" ? "h-13 w-13" : "h-12 w-12";
   return (
     <motion.button
       type="button"
@@ -38,8 +40,7 @@ function Btn({
       disabled={disabled}
       whileTap={{ scale: 0.86 }}
       transition={{ type: "spring", stiffness: 520, damping: 24 }}
-      style={{ color: tone }}
-      className={`soft-shadow flex ${dims} items-center justify-center rounded-full bg-[var(--color-surface)] transition-opacity disabled:opacity-35`}
+      className={`flex shrink-0 items-center justify-center rounded-full transition-opacity disabled:opacity-35 ${className}`}
     >
       {children}
     </motion.button>
@@ -48,18 +49,42 @@ function Btn({
 
 export default function ActionBar({ onDecide, onUndo, canUndo, disabled }: Props) {
   return (
-    <div className="flex items-center justify-center gap-3.5 px-4 pb-1 pt-3">
-      <Btn label="Вернуть карточку" hint="Backspace" size="sm" tone="var(--color-super)" onClick={onUndo} disabled={!canUndo}>
+    <div className="flex items-center justify-center gap-4 px-4 pb-1 pt-3">
+      <Btn
+        label="Вернуть карточку"
+        hint="Backspace"
+        onClick={onUndo}
+        disabled={!canUndo}
+        className="h-12 w-12 bg-[var(--color-surface)] text-[var(--color-muted)]"
+      >
         <IconUndo className="h-5 w-5" />
       </Btn>
-      <Btn label="Не нравится" hint="стрелка влево" tone="var(--color-nope)" onClick={() => onDecide("dislike")} disabled={disabled}>
-        <IconX className="h-8 w-8" />
+      <Btn
+        label="Не нравится"
+        hint="стрелка влево"
+        onClick={() => onDecide("dislike")}
+        disabled={disabled}
+        className="h-[62px] w-[62px] bg-[var(--color-surface)] text-[var(--color-nope)]"
+      >
+        <IconX className="h-7 w-7" />
       </Btn>
-      <Btn label="Сразу в корзину" hint="стрелка вверх" size="md" tone="var(--color-brand)" onClick={() => onDecide("super")} disabled={disabled}>
-        <IconCart className="h-6 w-6" />
+      <Btn
+        label="Сразу в корзину"
+        hint="стрелка вверх"
+        onClick={() => onDecide("super")}
+        disabled={disabled}
+        className="pop-shadow on-accent h-[74px] w-[74px] bg-[var(--color-super)]"
+      >
+        <IconCart className="h-8 w-8" />
       </Btn>
-      <Btn label="Нравится" hint="стрелка вправо" tone="var(--color-like)" onClick={() => onDecide("like")} disabled={disabled}>
-        <IconHeart className="h-8 w-8" />
+      <Btn
+        label="Нравится"
+        hint="стрелка вправо"
+        onClick={() => onDecide("like")}
+        disabled={disabled}
+        className="on-accent h-[62px] w-[62px] scale-[1.08] bg-[var(--color-like)]"
+      >
+        <IconHeart className="h-7 w-7" />
       </Btn>
     </div>
   );

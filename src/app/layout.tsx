@@ -34,8 +34,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f5f4fa" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f0e15" },
+    { media: "(prefers-color-scheme: light)", color: "#eceef2" },
+    { media: "(prefers-color-scheme: dark)", color: "#111215" },
   ],
   width: "device-width",
   initialScale: 1,
@@ -63,7 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Unbounded:wght@600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Onest:wght@400;500;600;700;800&display=swap"
         />
         <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
       </head>

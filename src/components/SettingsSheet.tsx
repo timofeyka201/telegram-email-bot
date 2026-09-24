@@ -58,7 +58,7 @@ export default function SettingsSheet({
       <p className="mb-2 mt-1 text-[12px] font-bold uppercase tracking-wider text-[var(--color-muted)]">Аккаунт</p>
       {account ? (
         <div className="soft-shadow flex items-center gap-3 rounded-2xl bg-[var(--color-surface)] px-4 py-3.5">
-          <span className="brand-gradient flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white">
+          <span className="brand-gradient flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
             <IconUser className="h-5 w-5" />
           </span>
           <span className="min-w-0 flex-1">

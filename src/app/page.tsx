@@ -18,6 +18,7 @@ import { IconCart, IconHeart, IconSearch, IconSliders } from "@/components/Icons
 import { toast } from "@/components/Toast";
 import { loadNextPage } from "@/lib/feed";
 import { DAILY_GOAL, useHydrated, useStore, type Decision } from "@/lib/store";
+import type { ExitWay } from "@/components/SwipeCard";
 import type { Product } from "@/lib/types";
 
 const VISIBLE = 3;
@@ -60,7 +61,14 @@ export default function DeckPage() {
   const setFilters = useStore((s) => s.setFilters);
   const finishOnboarding = useStore((s) => s.finishOnboarding);
 
-  const [exitDir, setExitDir] = useState<Decision>("like");
+  /**
+   * Куда улетает уходящая карточка. По умолчанию «никуда»: лента пересобирается
+   * не только от решений — профиль приезжает с сервера при входе, меняются
+   * фильтры, заканчивается тест вкусов. Раньше в этих случаях карточка улетала
+   * вправо со штампом «ХОЧУ», и выглядело это так, будто приложение лайкнуло
+   * товар само.
+   */
+  const [exitDir, setExitDir] = useState<ExitWay>("reset");
   const [sheet, setSheet] = useState<Product | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -124,6 +132,9 @@ export default function DeckPage() {
   const onDecide = useCallback(
     (d: Decision) => {
       setExitDir(d);
+      // Направление живёт ровно столько, сколько длится вылет карточки:
+      // дальше оно снова «никуда».
+      window.setTimeout(() => setExitDir("reset"), 420);
       const product = decide(d);
       if (!product) return;
       if (d === "like") {
@@ -355,7 +366,7 @@ function Interlude({
             <button
               type="button"
               onClick={onRetry}
-              className="brand-gradient rounded-2xl py-3.5 text-[15px] font-bold text-white"
+              className="brand-gradient rounded-full py-3.5 text-[15px] font-bold"
             >
               Попробовать снова
             </button>

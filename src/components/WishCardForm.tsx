@@ -136,7 +136,7 @@ export default function WishCardForm({
           type="button"
           disabled={busy}
           onClick={save}
-          className="brand-gradient w-full rounded-2xl py-3.5 text-[15px] font-bold text-white disabled:opacity-60"
+          className="brand-gradient w-full rounded-full py-3.5 text-[15px] font-bold disabled:opacity-60"
         >
           {busy ? "Сохраняем…" : item ? "Сохранить" : "Добавить в вишлист"}
         </button>

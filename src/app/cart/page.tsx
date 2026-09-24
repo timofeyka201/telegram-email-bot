@@ -53,8 +53,8 @@ export default function CartPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <header className="safe-top sticky top-0 z-30 flex items-center justify-between border-b border-[var(--color-line)] bg-[var(--color-surface)]/92 px-4 py-3 backdrop-blur-md">
-        <h1 className="font-display text-[20px] font-bold">Корзина</h1>
+      <header className="safe-top sticky top-0 z-30 flex items-center justify-between bg-[var(--color-bg)]/92 px-4 py-3 backdrop-blur-md">
+        <h1 className="font-display text-[28px] leading-none">Корзина</h1>
         {cart.length > 0 && (
           <button type="button" onClick={clearCart} className="text-[13px] font-semibold text-[var(--color-muted)]">
             Очистить
@@ -154,7 +154,7 @@ export default function CartPage() {
                 <button
                   type="button"
                   onClick={copyList}
-                  className="brand-gradient flex-1 rounded-2xl py-3 text-[15px] font-bold text-white"
+                  className="brand-gradient flex-1 rounded-full py-3 text-[15px] font-bold"
                 >
                   Скопировать заказ
                 </button>
@@ -217,7 +217,7 @@ function Empty() {
           Свайп вверх на карточке кладёт товар сразу сюда.
         </p>
       </div>
-      <Link href="/" className="brand-gradient rounded-2xl px-6 py-3 text-[15px] font-bold text-white">
+      <Link href="/" className="brand-gradient rounded-full px-6 py-3 text-[15px] font-bold">
         В ленту
       </Link>
     </div>

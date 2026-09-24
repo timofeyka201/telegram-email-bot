@@ -184,7 +184,7 @@ export default function AuthSheet({ open, onClose }: { open: boolean; onClose: (
           type="button"
           disabled={busy}
           onClick={() => void resend(awaiting)}
-          className="brand-gradient w-full rounded-2xl py-3.5 text-[15px] font-bold text-white disabled:opacity-50"
+          className="brand-gradient w-full rounded-full py-3.5 text-[15px] font-bold disabled:opacity-50"
         >
           {busy ? "Отправляем…" : "Выслать письмо ещё раз"}
         </button>
@@ -338,7 +338,7 @@ export default function AuthSheet({ open, onClose }: { open: boolean; onClose: (
         <button
           type="submit"
           disabled={busy}
-          className="brand-gradient mt-1 rounded-2xl py-3.5 text-[15px] font-bold text-white disabled:opacity-50"
+          className="brand-gradient mt-1 rounded-full py-3.5 text-[15px] font-bold disabled:opacity-50"
         >
           {busy
             ? "Секунду…"

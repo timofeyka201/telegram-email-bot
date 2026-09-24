@@ -67,7 +67,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.45 }}
-        className="brand-gradient pop-shadow w-full rounded-2xl py-4 text-[16px] font-bold text-white"
+        className="brand-gradient pop-shadow w-full rounded-full py-4 text-[16px] font-bold"
       >
         Поехали
       </motion.button>

@@ -19,8 +19,8 @@ export default function manifest(): MetadataRoute.Manifest {
     // оставляют как запасной вариант для тех, кто это поле не знает.
     display_override: ["standalone", "minimal-ui"],
     orientation: "portrait",
-    background_color: "#f5f4fa",
-    theme_color: "#5b3df5",
+    background_color: "#eceef2",
+    theme_color: "#ff5b2e",
     lang: "ru",
     categories: ["shopping", "lifestyle"],
     icons: [
