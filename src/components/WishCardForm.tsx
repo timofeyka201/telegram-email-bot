@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Img from "./Img";
 import Sheet from "./Sheet";
 import { toast } from "./Toast";
@@ -34,7 +34,9 @@ export default function WishCardForm({
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -78,6 +80,30 @@ export default function WishCardForm({
       setError("Нет связи с сервером");
     } finally {
       setFetching(false);
+    }
+  }
+
+  /**
+   * Фото из галереи. Ссылку на своё фото человеку взять негде, поэтому файл
+   * уезжает на сервер, а в карточке остаётся уже наш адрес.
+   */
+  async function uploadPhoto(file: File) {
+    setUploading(true);
+    setError(null);
+    try {
+      const body = new FormData();
+      body.append("photo", file);
+      const res = await fetch("/api/wishlist/photo", { method: "POST", body });
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !data.url) {
+        setError(data.error ?? "Не получилось загрузить фотографию");
+        return;
+      }
+      setImage(data.url);
+    } catch {
+      setError("Нет связи с сервером");
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -197,19 +223,54 @@ export default function WishCardForm({
           </label>
         </div>
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-semibold text-[var(--color-muted)]">Ссылка на фото</span>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[13px] font-semibold text-[var(--color-muted)]">Фото</span>
           <input
-            value={image}
-            onChange={(e) => setImage(e.target.value)}
-            inputMode="url"
-            placeholder="https://…"
-            className={field}
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              // Сбрасываем значение: иначе повторный выбор того же файла молчит.
+              e.target.value = "";
+              if (file) void uploadPhoto(file);
+            }}
           />
-        </label>
-        {image.trim() && (
-          <Img src={image.trim()} alt="Предпросмотр" className="h-32 w-32 rounded-2xl" fallbackLabel="Фото не открылось" />
-        )}
+          <div className="flex items-start gap-3">
+            {image.trim() ? (
+              <Img
+                src={image.trim()}
+                alt="Предпросмотр"
+                className="h-24 w-24 shrink-0 rounded-2xl"
+                fallbackLabel="Фото не открылось"
+              />
+            ) : (
+              <span className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border border-dashed border-[var(--color-line)] px-2 text-center text-[12px] leading-tight text-[var(--color-muted)]">
+                Пока без фото
+              </span>
+            )}
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={() => fileRef.current?.click()}
+                className="rounded-2xl bg-[var(--color-surface-2)] px-3.5 py-2.5 text-[14px] font-bold text-[var(--color-ink-soft)] disabled:opacity-60"
+              >
+                {uploading ? "Загружаем…" : image.trim() ? "Заменить фото" : "Выбрать из галереи"}
+              </button>
+              {image.trim() && !uploading && (
+                <button
+                  type="button"
+                  onClick={() => setImage("")}
+                  className="text-left text-[13px] font-semibold text-[var(--color-muted)]"
+                >
+                  Убрать фото
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
 
         <label className="flex flex-col gap-1.5">
           <span className="text-[13px] font-semibold text-[var(--color-muted)]">Пожелание</span>

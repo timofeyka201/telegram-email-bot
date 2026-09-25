@@ -117,10 +117,18 @@ export function normalizeCode(input: string): string | null {
 
 export const clip = (value: string, max: number): string => value.trim().slice(0, max);
 
-/** Ссылка «http(s)://…» и ничего больше: javascript: в чужом списке ни к чему. */
+/**
+ * Фотография, которую человек приложил из галереи: она лежит у нас, и адрес у
+ * неё не внешний. Имя — хэш содержимого, поэтому проверка заодно отсекает
+ * любые попытки подставить сюда чужой путь.
+ */
+export const UPLOAD_PATH = /^\/uploads\/[a-f0-9]{32}\.webp$/;
+
+/** Ссылка «http(s)://…» или наш собственный файл: javascript: в чужом списке ни к чему. */
 export function safeUrl(input?: string): string | undefined {
   const raw = input?.trim();
   if (!raw) return undefined;
+  if (UPLOAD_PATH.test(raw)) return raw;
   const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `https://${raw}`;
   try {
     const url = new URL(withScheme);

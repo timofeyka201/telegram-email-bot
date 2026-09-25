@@ -27,9 +27,8 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
           transition={{ type: "spring", stiffness: 260, damping: 20 }}
           className="mb-7 flex flex-col items-center text-center"
         >
-          <span className="brand-gradient pop-shadow mb-4 flex h-16 w-16 items-center justify-center rounded-[20px]">
-            <Mark className="h-9 w-9 [--color-brand:#fff] [--color-brand-2:#fff]" id="onb-mark" />
-          </span>
+          {/* Знак сам по себе плашка — подложка под ним была бы кораллом на коралле. */}
+          <Mark className="pop-shadow mb-4 h-16 w-16" />
           <h1 className="font-display text-[30px] font-bold leading-none">Swiper</h1>
           <p className="mt-2 max-w-[26ch] text-[15px] leading-snug text-[var(--color-muted)]">
             Витрина, которую листают пальцем. Четыре жеста — и больше ничего учить не нужно.

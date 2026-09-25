@@ -204,7 +204,8 @@ body {
         var(--color-bg) 58%);
   }
   .app-shell {
-    box-shadow: 0 0 0 1px var(--color-line), 0 30px 80px rgba(45, 33, 120, .18);
+    /* Единственный цвет, переживший смену палитры: тень была фиолетовой. */
+    box-shadow: 0 0 0 1px var(--color-line), 0 30px 80px rgba(20, 22, 28, .16);
   }
 }
 
