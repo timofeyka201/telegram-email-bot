@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 export type UserRecord = {
@@ -197,7 +197,12 @@ function fileStore(path: string): AuthStore {
       const data = await read();
       const result = await fn(data);
       await mkdir(dirname(path), { recursive: true });
-      await writeFile(path, JSON.stringify(data, null, 2), "utf8");
+      // 0600 и при создании, и потом: в файле лежат хэши паролей и живые
+      // сессии, и читать его не должен никто, кроме самого приложения.
+      // Каталог данных закрыт, но с этого года в него заходит nginx за
+      // картинками — пусть право на вход ничего не открывает.
+      await writeFile(path, JSON.stringify(data, null, 2), { encoding: "utf8", mode: 0o600 });
+      await chmod(path, 0o600);
       return result;
     });
     queue = next.catch(() => undefined);

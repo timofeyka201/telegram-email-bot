@@ -25,6 +25,9 @@ packages:
   - curl
   - ca-certificates
   - rsync
+  # Нужен setfacl: nginx читает картинки из каталога данных, но остального
+  # в нём видеть не должен.
+  - acl
 
 write_files:
   # ---------------------------------------------------------- служба
@@ -70,17 +73,74 @@ write_files:
           # сообщением.
           client_max_body_size 15m;
 
+          # Настройки проксирования заданы на уровне server: их наследуют обе
+          # location ниже, которые ходят в приложение.
+          proxy_http_version 1.1;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          # По этому заголовку работает защита от перебора паролей:
+          # без него все посетители выглядят как один.
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+          proxy_set_header X-Forwarded-Host $host;
+
+          # Картинки отдаёт nginx, а не Node (см. сниппет ниже).
+          include snippets/swiper-media.conf;
+
           location / {
               proxy_pass http://127.0.0.1:3000;
-              proxy_http_version 1.1;
-              proxy_set_header Host $host;
-              proxy_set_header X-Real-IP $remote_addr;
-              # По этому заголовку работает защита от перебора паролей:
-              # без него все посетители выглядят как один.
-              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-              proxy_set_header X-Forwarded-Proto $scheme;
-              proxy_set_header X-Forwarded-Host $host;
           }
+      }
+
+  # ------------------------------- раздача картинок мимо приложения
+  # Чтение файла с диска — самая частая операция приложения, и в Node она
+  # стоит в одной очереди с лентой и свайпами: пока процесс отдаёт мегабайт
+  # картинок, он не отвечает ни на что другое. nginx делает это, не занимая
+  # процесс приложения вовсе.
+  #
+  # Вынесено в отдельный файл, чтобы на работающем сервере правка сводилась к
+  # одной строке include в конфиге сайта — его мог менять certbot.
+  - path: /etc/nginx/snippets/swiper-media.conf
+    permissions: "0644"
+    content: |
+      # Имя сверяем тем же шаблоном, что и приложение: в каталоге картинок
+      # рядом лежит manifest.json со списком первоисточников, и отдавать его
+      # наружу незачем. Кавычки вокруг регулярки обязательны: без них nginx
+      # читает {32} как начало блока.
+      location ~ "^/media/([a-f0-9]{32}(?:-t)?\.webp)$" {
+          alias /var/lib/swiper/images/$1;
+          # Промах — не 404: приложение в этом случае уводит на первоисточник,
+          # и карточка остаётся с фотографией.
+          error_page 404 = @app;
+          # В каталоге только webp, а полагаться на mime.types незачем.
+          types { }
+          default_type image/webp;
+          add_header Cache-Control "public, max-age=31536000, immutable" always;
+          access_log off;
+      }
+
+      # Фотографии, приложенные к желаниям в вишлисте. Имя — хэш содержимого,
+      # поэтому файл по адресу никогда не меняется.
+      location ~ "^/uploads/([a-f0-9]{32}\.webp)$" {
+          alias /var/lib/swiper/uploads/$1;
+          error_page 404 = @app;
+          types { }
+          default_type image/webp;
+          add_header Cache-Control "public, max-age=31536000, immutable" always;
+          access_log off;
+      }
+
+      # Сюда попадают промахи: дальше разбирается приложение. Заголовки
+      # перечислены заново — сниппет должен работать сам по себе, где бы его
+      # ни подключили.
+      location @app {
+          proxy_pass http://127.0.0.1:3000;
+          proxy_http_version 1.1;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+          proxy_set_header X-Forwarded-Host $host;
       }
 
   # ---------------------------- выкладка: общая часть для обоих путей
@@ -156,9 +216,19 @@ runcmd:
 
   # Каталог данных: учётные записи живут отдельно от кода, чтобы выкладка
   # их не задевала.
-  - [mkdir, -p, /var/lib/swiper]
-  - [chown, "swiper:swiper", /var/lib/swiper]
+  - [mkdir, -p, /var/lib/swiper/images, /var/lib/swiper/uploads]
+  - [chown, -R, "swiper:swiper", /var/lib/swiper]
   - [chmod, "700", /var/lib/swiper]
+
+  # Картинки отдаёт nginx, поэтому www-data нужен доступ внутрь каталога
+  # данных. Даём ровно его: право войти в /var/lib/swiper (без права
+  # посмотреть, что там лежит) и чтение двух каталогов с картинками. Учётные
+  # записи, снапшот каталога и всё остальное остаются недоступны.
+  - [setfacl, -m, "u:www-data:x", /var/lib/swiper]
+  - [setfacl, -R, -m, "u:www-data:rX", /var/lib/swiper/images, /var/lib/swiper/uploads]
+  # То же самое для файлов, которые появятся позже: импортёр качает картинки,
+  # люди прикладывают фотографии к желаниям.
+  - [setfacl, -R, -d, -m, "u:www-data:rX", /var/lib/swiper/images, /var/lib/swiper/uploads]
 
   # Приёмник кода: сюда вы пушите с ноутбука, минуя GitHub.
   - [sudo, -u, swiper, git, init, --bare, /home/swiper/repo.git]
