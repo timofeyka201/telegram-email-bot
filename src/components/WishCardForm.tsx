@@ -94,9 +94,15 @@ export default function WishCardForm({
       const body = new FormData();
       body.append("photo", file);
       const res = await fetch("/api/wishlist/photo", { method: "POST", body });
-      const data = (await res.json()) as { url?: string; error?: string };
+      // Отказ по размеру приходит от nginx страницей, а не нашим JSON, —
+      // поэтому разбор ответа не должен превращаться в «нет связи».
+      const data = await res
+        .json()
+        .then((d) => d as { url?: string; error?: string })
+        .catch(() => ({}) as { url?: string; error?: string });
       if (!res.ok || !data.url) {
-        setError(data.error ?? "Не получилось загрузить фотографию");
+        const heavy = res.status === 413 ? "Фотография слишком тяжёлая — выберите другую" : null;
+        setError(data.error ?? heavy ?? "Не получилось загрузить фотографию");
         return;
       }
       setImage(data.url);
