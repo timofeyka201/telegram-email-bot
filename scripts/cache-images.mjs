@@ -38,6 +38,14 @@ const THUMB = Number(args.thumb ?? 112);
 const THUMB_QUALITY = Number(args.thumbQuality ?? 70);
 /** Сколько картинок обработать за прогон: чтобы первый запуск не длился часами. */
 const LIMIT = Number(args.limit ?? Infinity);
+/**
+ * Сколько фотографий карточки переносить к себе. У товара Etsy их бывает
+ * восемь, и при большом каталоге именно они, а не запросы к API, упираются в
+ * диск. Первые снимки человек видит всегда, последние — почти никогда,
+ * поэтому хвост остаётся на чужом CDN: приложение умеет показывать и такие,
+ * просто медленнее.
+ */
+const PER_CARD = Number(args.perCard ?? process.env.IMAGE_PER_CARD ?? 3);
 /** Качаем в несколько потоков, но без фанатизма — чужой CDN нам ничего не должен. */
 const PARALLEL = Number(args.parallel ?? 6);
 
@@ -109,9 +117,15 @@ async function main() {
   // Собираем уникальные внешние адреса: одна картинка может встретиться у
   // нескольких карточек, качать её дважды незачем.
   const remote = new Set();
-  for (const p of products) for (const u of p.images ?? []) if (/^https?:\/\//.test(u)) remote.add(u);
+  // Считаем от начала списка, а не от числа внешних адресов: у карточки,
+  // первые снимки которой уже перенесены, они записаны как /media/… — иначе
+  // предел сдвигался бы вглубь с каждым прогоном.
+  for (const p of products) {
+    for (const u of (p.images ?? []).slice(0, PER_CARD)) if (/^https?:\/\//.test(u)) remote.add(u);
+  }
 
   const todo = [...remote].filter((u) => !existsSync(join(DIR, nameFor(u)))).slice(0, LIMIT);
+  console.log(`Переносим не больше ${PER_CARD} снимков с карточки.`);
   console.log(`Внешних картинок: ${remote.size}, уже скачано: ${remote.size - [...remote].filter((u) => !existsSync(join(DIR, nameFor(u)))).length}, к загрузке: ${todo.length}`);
 
   let done = 0;

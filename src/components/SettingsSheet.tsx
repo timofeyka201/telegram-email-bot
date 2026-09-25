@@ -8,6 +8,7 @@ import AuthSheet from "./AuthSheet";
 import InstallBlock from "./InstallBlock";
 import SizeProfileSheet from "./SizeProfileSheet";
 import { toast } from "./Toast";
+import { plural } from "@/lib/money";
 import { needsConversion, symbolOf } from "@/lib/money";
 import { hasSizes } from "@/lib/sizes";
 import { flushPush } from "@/lib/sync";
@@ -229,7 +230,10 @@ export default function SettingsSheet({
             <Mark className="h-8 w-8 shrink-0" id="set-mark" />
             <div className="min-w-0">
               <p className="truncate text-[14px] font-semibold">{sourceLabel || "Своя база"}</p>
-              <p className="tnum text-[12px] text-[var(--color-muted)]">{catalogSize} карточек</p>
+              <p className="tnum text-[12px] text-[var(--color-muted)]">
+                {/* Пять цифр подряд читаются плохо, а «21 карточек» — ещё хуже. */}
+                {catalogSize.toLocaleString("ru-RU")} {plural(catalogSize, "карточка", "карточки", "карточек")}
+              </p>
             </div>
           </div>
         </>
