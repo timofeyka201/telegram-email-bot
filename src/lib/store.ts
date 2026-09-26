@@ -239,7 +239,7 @@ export const useStore = create<State>()(
 
         const cart =
           decision === "super" && !s.cart.some((c) => c.product.id === product.id)
-            ? [{ product, qty: product.minOrder && product.minOrder > 1 ? product.minOrder : 1 }, ...s.cart]
+            ? [{ product, qty: 1 }, ...s.cart]
             : s.cart;
 
         let deck = s.deck;
@@ -336,11 +336,17 @@ export const useStore = create<State>()(
           return { wishlist: products, watch, updatedAt: Date.now() };
         }),
 
+      /**
+       * Всегда одна штука. Раньше количество подставлялось из minOrder —
+       * минимальной партии у продавца, — и человек, положивший тушь для
+       * ресниц, находил в корзине сорок восемь штук, ничего для этого не
+       * сделав. Минимум продавца — это справка, а не решение за покупателя:
+       * заказ всё равно оформляется на стороне магазина.
+       */
       addToCart: (product, sku) =>
         set((s) => {
           if (s.cart.some((c) => c.product.id === product.id)) return s;
-          const qty = product.minOrder && product.minOrder > 1 ? product.minOrder : 1;
-          return { cart: [{ product, qty, sku }, ...s.cart], watch: rememberPrice(s.watch, product), updatedAt: Date.now() };
+          return { cart: [{ product, qty: 1, sku }, ...s.cart], watch: rememberPrice(s.watch, product), updatedAt: Date.now() };
         }),
 
       setQty: (id, qty) =>

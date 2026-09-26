@@ -110,7 +110,6 @@ export function toProduct(p: DjProduct): Product | null {
   if (!images.length) return null; // карточка без фото ленте не нужна
 
   const price = typeof p.price === "number" ? p.price : undefined;
-  const moq = p.minimumOrderQuantity && p.minimumOrderQuantity > 1 ? p.minimumOrderQuantity : undefined;
   // Скидка в каталоге задаётся процентом — показываем её как «цену до партии».
   const listPrice =
     price !== undefined && p.discountPercentage
@@ -124,8 +123,11 @@ export function toProduct(p: DjProduct): Product | null {
     images: images.slice(0, 12),
     price,
     priceMax: listPrice && price !== undefined && listPrice > price ? listPrice : undefined,
-    tiers: price !== undefined ? [{ from: moq ?? 1, price }] : [],
-    minOrder: moq,
+    tiers: price !== undefined ? [{ from: 1, price }] : [],
+    // minimumOrderQuantity здесь выдуман вместе с самим набором: у розничной
+    // туши для ресниц он равен сорока восьми. Оптовых партий в этой витрине
+    // нет, поэтому поле не переносим — иначе оно выглядит как настоящее.
+    minOrder: 1,
     description: p.description,
     attributes: attributes(p),
     skus: [],

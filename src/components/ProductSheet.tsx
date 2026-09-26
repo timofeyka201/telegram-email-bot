@@ -102,7 +102,10 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
   const chips = [
     full.category ? categoryLabel(full.category) : null,
     ...full.attributes.slice(0, 3).map((a) => a.value),
-    full.minOrder && full.minOrder > 1 ? `от ${full.minOrder} шт.` : null,
+    // Минимальная партия есть только на опте (1688). Розничные источники
+    // кладут в это поле что попало — и из-за него в корзину когда-то
+    // попадало по сорок восемь штук туши для ресниц.
+    full.source === "bhapi" && full.minOrder && full.minOrder > 1 ? `от ${full.minOrder} шт.` : null,
   ].filter((c): c is string => !!c && c.length <= 28);
 
   const sellerLine = [
