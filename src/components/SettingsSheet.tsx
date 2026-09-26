@@ -19,6 +19,13 @@ const THEMES = [
   { id: "system", label: "Как в системе", Icon: IconAuto },
 ] as const;
 
+/**
+ * Раздел «Мои размеры» скрыт: сам блок, гайд по размерам и хранение размеров
+ * в профиле оставлены нетронутыми — поменяйте на true, и раздел вернётся на
+ * место таким, каким был.
+ */
+const SHOW_SIZES = false;
+
 export default function SettingsSheet({
   open,
   onClose,
@@ -183,6 +190,8 @@ export default function SettingsSheet({
         </>
       )}
 
+      {SHOW_SIZES && (
+        <>
       <p className="mb-2 mt-6 text-[12px] font-bold uppercase tracking-wider text-[var(--color-muted)]">Профиль</p>
       <button
         type="button"
@@ -204,6 +213,8 @@ export default function SettingsSheet({
         </span>
         <IconChevron className="h-5 w-5 shrink-0 text-[var(--color-muted)]" />
       </button>
+        </>
+      )}
 
       <p className="mb-2 mt-6 text-[12px] font-bold uppercase tracking-wider text-[var(--color-muted)]">Статистика</p>
       <div className="soft-shadow grid grid-cols-3 gap-px overflow-hidden rounded-2xl bg-[var(--color-line)]">
