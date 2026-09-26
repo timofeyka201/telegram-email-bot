@@ -28,7 +28,7 @@ const FOREIGN_IMAGE_LIMIT = 60;
  * и закэшировать не может — а с домашнего экрана приложение могут открыть
  * сразу в метро.
  */
-const PRECACHE = [OFFLINE_URL, "/", "/likes", "/cart", "/icon.svg"];
+const PRECACHE = [OFFLINE_URL, "/", "/likes", "/wishlist", "/cart", "/icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

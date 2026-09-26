@@ -6,6 +6,18 @@ export function proxied(src: string): string {
   return `/api/img?u=${encodeURIComponent(src)}`;
 }
 
+/**
+ * Адрес превью для своих картинок. Ленте миниатюр под фотографией не нужен
+ * файл на 640 точек: десяток таких начинает грузиться сразу и отнимает канал
+ * у того снимка, который человек как раз рассматривает.
+ *
+ * Для чужих адресов размера у нас нет — возвращаем как есть.
+ */
+export function thumbOf(src?: string): string | undefined {
+  if (!src) return src;
+  return /^\/media\/[a-f0-9]{32}\.webp$/.test(src) ? src.replace(/\.webp$/, "-t.webp") : src;
+}
+
 type Props = {
   src?: string;
   alt: string;
@@ -24,6 +36,8 @@ export function prefetchImage(src?: string): void {
   const img = new Image();
   img.referrerPolicy = "no-referrer";
   img.decoding = "async";
+  // Заранее — значит не в ущерб тому, что на экране сейчас.
+  img.fetchPriority = "low";
   img.src = src;
 }
 
@@ -67,6 +81,15 @@ export default function Img({ src, alt, className = "", fallbackLabel, eager }: 
       <img
         key={url}
         src={url}
+        /*
+         * Картинка из кэша бывает готова раньше, чем React успевает повесить
+         * onLoad, — и тогда событие не приходит вовсе, а снимок остаётся
+         * прозрачным. Раньше это почти не встречалось; теперь, когда соседние
+         * фотографии подгружаются заранее, попадание в кэш стало обычным делом.
+         */
+        ref={(el) => {
+          if (el?.complete && el.naturalWidth > 0) setLoaded(true);
+        }}
         alt={alt}
         loading={eager ? "eager" : "lazy"}
         // Верхняя карточка важнее фоновых: без подсказки браузер раздаёт им

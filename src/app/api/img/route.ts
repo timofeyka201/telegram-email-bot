@@ -18,6 +18,9 @@ const ALLOWED = [
   /(^|\.)picsum\.photos$/i,
   /(^|\.)unsplash\.com$/i,
   /(^|\.)dummyjson\.com$/i,
+  // Каталог приезжает с Etsy: без этого запасной путь загрузки фотографии
+  // упирается в «host not allowed» ровно там, где он и нужен.
+  /(^|\.)etsystatic\.com$/i,
   /(^|\.)wbbasket\.ru$/i,
   /(^|\.)wb\.ru$/i,
 ];

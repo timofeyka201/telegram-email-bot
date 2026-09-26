@@ -88,7 +88,6 @@ async function fromDummyJson(limit) {
       const images = (p.images ?? []).map(cleanImage).filter(Boolean);
       if (!images.length) continue;
       const price = money(p.price);
-      const moq = p.minimumOrderQuantity > 1 ? p.minimumOrderQuantity : undefined;
       out.push({
         id: `dj-${p.id}`,
         title: p.title,
@@ -100,8 +99,11 @@ async function fromDummyJson(limit) {
         priceMax: p.discountPercentage
           ? money(price / (1 - p.discountPercentage / 100))
           : undefined,
-        tiers: price !== undefined ? [{ from: moq ?? 1, price }] : [],
-        minOrder: moq,
+        tiers: price !== undefined ? [{ from: 1, price }] : [],
+        // minimumOrderQuantity выдуман вместе с набором: у розничной туши
+        // «минимальная партия» равна сорока восьми. Не переносим, иначе
+        // витрина выглядит оптовой.
+        minOrder: 1,
         description: p.description,
         attributes: [
           ["Бренд", p.brand], ["Категория", p.category], ["Артикул", p.sku],

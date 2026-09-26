@@ -1,6 +1,7 @@
 "use client";
 
 import { useStore, type SyncedProfile } from "./store";
+import { loadMyWishlist } from "./wish/client";
 
 /**
  * Синхронизация личных данных с сервером. Работает только при входе; гость
@@ -111,7 +112,6 @@ function merge(local: SyncedProfile, remote: SyncedProfile): SyncedProfile {
       likes: Math.max(local.stats?.likes ?? 0, remote.stats?.likes ?? 0),
       bestStreak: Math.max(local.stats?.bestStreak ?? 0, remote.stats?.bestStreak ?? 0),
     },
-    rates: { ...(stale.rates ?? {}), ...(fresh.rates ?? {}) },
     tasted: (local.tasted ?? false) || (remote.tasted ?? false),
     updatedAt: Date.now(),
   };
@@ -129,11 +129,15 @@ export async function syncOnLogin(): Promise<"merged" | "pushed" | "none"> {
   if (remote === "error") return "none";
   if (!remote) {
     await push();
+    await loadMyWishlist();
     return "pushed";
   }
 
   state.importProfile(merge(state.exportProfile(), remote));
   await push();
+  // Вишлист, отложенный до входа, переезжает в аккаунт: иначе список желаний
+  // на сервере окажется пустым ровно у тех, кто уже начал им пользоваться.
+  await loadMyWishlist();
   return "merged";
 }
 

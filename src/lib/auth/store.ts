@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 export type UserRecord = {
@@ -38,6 +38,21 @@ export interface AuthStore {
   takeToken(key: string): Promise<string | null>;
   getProfile(userId: string): Promise<string | null>;
   putProfile(userId: string, json: string): Promise<void>;
+  /**
+   * Произвольная запись сервиса — вишлисты, указатель «код → владелец», брони.
+   * Отдельные методы под каждый вид записи раздували бы оба хранилища вдвое,
+   * поэтому вид записи зашит в префикс ключа, а разбор JSON — дело вызывающего.
+   */
+  getDoc(key: string): Promise<string | null>;
+  putDoc(key: string, json: string): Promise<void>;
+  /** Занимает ключ, если он свободен. false — ключ уже за кем-то. */
+  claimDoc(key: string, value: string): Promise<boolean>;
+  /**
+   * Чтение, изменение и запись одной операцией. Нужно там, где два запроса могут
+   * прийти одновременно: двое друзей бронируют подарки в одном списке.
+   * Возврат null из fn оставляет запись нетронутой.
+   */
+  editDoc(key: string, fn: (current: string | null) => string | null): Promise<void>;
 }
 
 // ------------------------------------------------------------------- Redis
@@ -132,6 +147,21 @@ function redisStore(url: string, token: string): AuthStore {
     async putProfile(userId, json) {
       await call(["SET", `profile:${userId}`, json]);
     },
+    getDoc: (key) => call<string>(["GET", key]),
+    async putDoc(key, json) {
+      await call(["SET", key, json]);
+    },
+    async claimDoc(key, value) {
+      return (await call<string>(["SET", key, value, "NX"])) === "OK";
+    },
+    async editDoc(key, fn) {
+      // Честно: у REST-шлюза нет транзакции на чтение-запись, поэтому две
+      // одновременные правки одного списка теоретически могут наложиться.
+      // Окно — единицы миллисекунд, а цена — чужая бронь; когда это станет
+      // важно, здесь появится EVAL с маленьким скриптом на Lua.
+      const next = fn(await call<string>(["GET", key]));
+      if (next !== null) await call(["SET", key, next]);
+    },
   };
 }
 // -------------------------------------------------------------------- файл
@@ -141,9 +171,10 @@ type FileShape = {
   sessions: Record<string, SessionRecord>;
   profiles: Record<string, string>;
   tokens: Record<string, { value: string; expiresAt: number }>;
+  docs: Record<string, string>;
 };
 
-const EMPTY: FileShape = { users: {}, emails: {}, sessions: {}, profiles: {}, tokens: {} };
+const EMPTY: FileShape = { users: {}, emails: {}, sessions: {}, profiles: {}, tokens: {}, docs: {} };
 
 /**
  * Хранилище для разработки и самостоятельного запуска. На Vercel не годится:
@@ -166,7 +197,12 @@ function fileStore(path: string): AuthStore {
       const data = await read();
       const result = await fn(data);
       await mkdir(dirname(path), { recursive: true });
-      await writeFile(path, JSON.stringify(data, null, 2), "utf8");
+      // 0600 и при создании, и потом: в файле лежат хэши паролей и живые
+      // сессии, и читать его не должен никто, кроме самого приложения.
+      // Каталог данных закрыт, но с этого года в него заходит nginx за
+      // картинками — пусть право на вход ничего не открывает.
+      await writeFile(path, JSON.stringify(data, null, 2), { encoding: "utf8", mode: 0o600 });
+      await chmod(path, 0o600);
       return result;
     });
     queue = next.catch(() => undefined);
@@ -237,6 +273,26 @@ function fileStore(path: string): AuthStore {
     putProfile: (userId, json) =>
       mutate((data) => {
         data.profiles[userId] = json;
+      }),
+    async getDoc(key) {
+      return (await read()).docs?.[key] ?? null;
+    },
+    putDoc: (key, json) =>
+      mutate((data) => {
+        data.docs[key] = json;
+      }),
+    claimDoc: (key, value) =>
+      mutate((data) => {
+        if (data.docs[key] !== undefined) return false;
+        data.docs[key] = value;
+        return true;
+      }),
+    editDoc: (key, fn) =>
+      mutate((data) => {
+        // Очередь внутри mutate и делает операцию атомарной: между чтением и
+        // записью сюда не вклинится вторая бронь.
+        const next = fn(data.docs[key] ?? null);
+        if (next !== null) data.docs[key] = next;
       }),
   };
 }

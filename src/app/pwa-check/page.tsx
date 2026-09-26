@@ -160,7 +160,7 @@ export default function PwaCheckPage() {
                 toast("Не получилось скопировать — сделайте снимок экрана", "warn");
               }
             }}
-            className="brand-gradient mt-4 w-full rounded-2xl py-3 text-[15px] font-bold text-white"
+            className="brand-gradient mt-4 w-full rounded-full py-3 text-[15px] font-bold"
           >
             Скопировать отчёт
           </button>

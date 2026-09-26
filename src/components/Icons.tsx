@@ -195,3 +195,35 @@ export const IconShare = ({ className }: P) => (
     <path d="M5 13v6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6" />
   </svg>
 );
+
+/** Подарок — бронь в чужом вишлисте. */
+export const IconGift = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <rect x="3" y="9" width="18" height="11.5" rx="1.6" />
+    <path d="M2.2 9h19.6M12 9v11.5" />
+    <path d="M12 9c-2.6 0-5-.6-5-2.6A2.4 2.4 0 0 1 9.4 4c1.8 0 2.6 2.4 2.6 5Z" />
+    <path d="M12 9c2.6 0 5-.6 5-2.6A2.4 2.4 0 0 0 14.6 4C12.8 4 12 6.4 12 9Z" />
+  </svg>
+);
+
+/** Копировать — две наложенные карточки. */
+export const IconCopy = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <rect x="8" y="8" width="12" height="12" rx="3" />
+    <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+  </svg>
+);
+
+/** Плюс — «добавить». */
+export const IconPlus = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+);
+
+/** Шеврон вниз — раскрыть раздел, закрыть шторку. */
+export const IconChevronDown = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M6 9l6 6 6-6" />
+  </svg>
+);

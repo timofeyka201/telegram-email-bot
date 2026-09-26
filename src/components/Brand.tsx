@@ -1,26 +1,15 @@
 /**
- * Знак Swiper — след свайпа: росчерк «S», оставленный пальцем, с точкой на
- * конце жеста. Читается с 20 пикселей, поэтому годится и для иконки, и для
- * шапки. Градиент берётся из фирменных токенов, так что знак живёт в обеих темах.
+ * Знак Swiper. Это та же картинка, что стоит на домашнем экране и во вкладке
+ * браузера: рисовать её второй раз вектором значит завести копию, которая
+ * разойдётся с оригиналом при первой же правке макета.
+ *
+ * Скругление задаём сами: в файле иконки заливка идёт до краёв, потому что
+ * форму вырезает операционная система, а внутри приложения вырезать некому.
  */
-export function Mark({ className = "", id = "swiper-mark" }: { className?: string; id?: string }) {
+export function Mark({ className = "" }: { className?: string; id?: string }) {
   return (
-    <svg viewBox="0 0 32 32" className={className} aria-hidden>
-      <defs>
-        <linearGradient id={id} x1="4" y1="28" x2="28" y2="4" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="var(--color-brand)" />
-          <stop offset="100%" stopColor="var(--color-brand-2)" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M22.5 9.2C22.5 6.1 9.5 5.6 9.5 11.4c0 5.4 13 3.6 13 9.4 0 5.4-11.5 5.6-13 1.4"
-        fill="none"
-        stroke={`url(#${id})`}
-        strokeWidth="4.2"
-        strokeLinecap="round"
-      />
-      <circle cx="9.5" cy="22.2" r="3.1" fill="var(--color-brand-2)" />
-    </svg>
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img src="/icons/icon-192.png" alt="" aria-hidden className={`${className} rounded-[22%] object-cover`} />
   );
 }
 
@@ -30,9 +19,7 @@ export function Logo({ compact = false }: { compact?: boolean }) {
     <span className="flex items-center gap-2">
       <Mark className="h-7 w-7 shrink-0" />
       {!compact && (
-        <span className="font-display text-[19px] font-bold leading-none tracking-tight text-[var(--color-ink)]">
-          Swiper
-        </span>
+        <span className="font-display text-[19px] leading-none text-[var(--color-ink)]">Swiper</span>
       )}
     </span>
   );

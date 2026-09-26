@@ -42,25 +42,75 @@ const CHECK = !!args.check;
 /**
  * Запросы разложены по темам: без этого поиск вернёт 5000 однотипных товаров.
  * Каждый прогон начинает с той темы, на которой закончился прошлый.
+ *
+ * Список тем — это и есть размер каталога: глубже DEPTH позиций по одному
+ * слову Etsy не пускает, поэтому потолок равен «темы × DEPTH × сортировки».
+ * С двадцатью темами и глубиной 1000 он составлял 20 000 карточек, и каталог
+ * упёрся в него, а ночной прогон продолжал тратить бюджет на перебор уже
+ * известного.
  */
 const TOPICS = [
   "handmade jewelry", "leather bag", "ceramic mug", "wall art print", "knitted sweater",
   "wooden toy", "scented candle", "silver ring", "linen dress", "vintage lamp",
   "phone case", "notebook journal", "embroidery kit", "macrame", "cutting board",
   "earrings", "tote bag", "poster", "pet collar", "home decor",
+  "necklace", "bracelet", "brooch", "hair clip", "watch strap",
+  "leather wallet", "keychain", "backpack", "laptop sleeve", "belt",
+  "wooden bowl", "tea set", "wine glass", "coasters", "cheese board",
+  "planter pot", "vase", "wall clock", "picture frame", "mirror",
+  "quilt", "baby blanket", "apron", "tea towel", "rug",
+  "enamel pin", "sticker pack", "bookmark", "greeting card", "wrapping paper",
+  "resin art", "soap bar", "bath bomb", "crochet", "beanie",
+  "chess set", "puzzle", "bird feeder", "wind chime", "lantern",
 ];
+
+/** Глубина обхода по одной теме. Etsy отдаёт не больше нескольких тысяч. */
+const DEPTH = Number(args.depth ?? process.env.ETSY_TOPIC_DEPTH ?? 2000);
+
+/**
+ * Одно и то же слово с разной сортировкой открывает разные срезы выдачи:
+ * «score» — то, что Etsy считает лучшим, «created» — свежие объявления,
+ * которых в первой сортировке нет вовсе.
+ */
+const SORTS = ["score", "created"];
+
+/**
+ * Потолок каталога. Упираемся не в запросы — их с избытком, — а в диск:
+ * фотографии каждой карточки лежат у нас же. Дойдя до потолка, импортёр
+ * перестаёт добирать новое, но продолжает обновлять цены у известного.
+ */
+const MAX_PRODUCTS = Number(args.max ?? process.env.CATALOG_MAX ?? 60000);
+
+/**
+ * Сколько страниц обновлять за ночь, когда каталог уже полон. Обход идёт с
+ * того места, где кончился прошлый, поэтому за несколько ночей цены
+ * обновляются по всему каталогу, а бюджет не тратится впустую.
+ */
+const REFRESH_PAGES = Number(args.refresh ?? 300);
+
+/**
+ * Сколько страниц подряд без единой новой карточки считать за «темы
+ * кончились». Выдача обойдена по кругу, дальше ночь уходила бы на перебор
+ * того, что уже лежит в снапшоте. Двести страниц — это двадцать тысяч
+ * объявлений, обновивших свои цены, и только потом остановка.
+ */
+const DRY_PAGES = Number(args.dry ?? 200);
 
 // --------------------------------------------------------------- бюджет
 /** Счётчик запросов за сутки. Живёт рядом со снапшотом и переживает перезапуски. */
 function readLedger() {
   const today = new Date().toISOString().slice(0, 10);
+  let stored = null;
   try {
-    const l = JSON.parse(readFileSync(LEDGER, "utf8"));
-    if (l.day === today) return l;
+    stored = JSON.parse(readFileSync(LEDGER, "utf8"));
   } catch {
-    // Первого запуска ещё не было или файл повреждён — начинаем сутки заново.
+    // Первого запуска ещё не было или файл повреждён — начинаем с нуля.
   }
-  return { day: today, used: 0, topic: 0, offset: 0 };
+  // Счётчик запросов живёт сутки, а место в обходе — нет. Раньше со сменой
+  // даты терялось и оно, поэтому каждую ночь импортёр начинал с первой темы и
+  // заново перебирал то, что уже лежит в снапшоте.
+  const where = { topic: stored?.topic ?? 0, offset: stored?.offset ?? 0, sort: stored?.sort ?? 0 };
+  return stored?.day === today ? { ...stored, ...where } : { day: today, used: 0, ...where };
 }
 
 function writeLedger(l) {
@@ -244,13 +294,26 @@ async function main() {
   let added = 0;
   let topic = ledger.topic ?? 0;
   let offset = ledger.offset ?? 0;
+  let sort = ledger.sort ?? 0;
+  let pages = 0;
+  let skipped = 0;
+  let dry = 0;
 
   // Пара «поиск + картинки» стоит два запроса, поэтому цикл идёт, пока их хватает.
   while (spent + 2 <= left) {
+    // Каталог полон: добирать нечего, остаётся обновить цены — и не всю ночь.
+    if (known.size >= MAX_PRODUCTS && pages >= REFRESH_PAGES) {
+      console.log(`Каталог добрал до потолка (${MAX_PRODUCTS}); обновили ${pages} страниц и останавливаемся.`);
+      break;
+    }
+    if (dry >= DRY_PAGES) {
+      console.log(`${dry} страниц подряд без новых карточек — выдача обойдена, остальной бюджет не тратим.`);
+      break;
+    }
     const keywords = TOPICS[topic % TOPICS.length];
     let found;
     try {
-      found = await call("/listings/active", { limit: PAGE, offset, keywords, sort_on: "score" });
+      found = await call("/listings/active", { limit: PAGE, offset, keywords, sort_on: SORTS[sort % SORTS.length] });
     } catch (e) {
       if (e.message === "LIMIT") {
         console.log("Etsy ответил 429 — останавливаемся, продолжим в следующий раз.");
@@ -279,6 +342,7 @@ async function main() {
     }
 
     const byId = new Map(withImages.map((l) => [l.listing_id, l]));
+    const addedBefore = added;
     for (const listing of results) {
       // Пакетный ответ берём только ради картинок и магазина: основа — выдача
       // поиска. Иначе любое расхождение в полях между ручками молча затирало бы
@@ -286,16 +350,26 @@ async function main() {
       const extra = byId.get(listing.listing_id);
       const product = toProduct({ ...listing, shop: extra?.shop }, extra?.images);
       if (!usable(product)) continue;
-      // Уже известный товар обновляем — цены у Etsy меняются, — но не дублируем.
-      if (!known.has(product.id)) added += 1;
+      const fresh = !known.has(product.id);
+      // Дойдя до потолка, новое не берём, а известное продолжаем обновлять:
+      // цены у Etsy меняются, и ради них обход и продолжается.
+      if (fresh && known.size >= MAX_PRODUCTS) {
+        skipped += 1;
+        continue;
+      }
+      if (fresh) added += 1;
       known.set(product.id, product);
     }
 
+    pages += 1;
+    dry = added > addedBefore ? 0 : dry + 1;
     offset += PAGE;
-    // Etsy не отдаёт выборку глубже 50 000, да и смысла копать одну тему нет.
-    if (offset >= 1000) {
+    if (offset >= DEPTH) {
       topic += 1;
       offset = 0;
+      // Темы кончились — идём по второму кругу с другой сортировкой, она
+      // открывает ту часть выдачи, которой в первой не было.
+      if (topic % TOPICS.length === 0) sort += 1;
     }
     console.log(`  «${keywords}»: получено ${results.length}, в каталоге ${known.size}`);
   }
@@ -309,10 +383,12 @@ async function main() {
     products,
   });
 
-  writeLedger({ day: ledger.day, used: ledger.used + spent, topic, offset });
+  writeLedger({ day: ledger.day, used: ledger.used + spent, topic, offset, sort });
   console.log(
     `Готово: было ${before}, стало ${products.length} (+${added}). ` +
-      `Потрачено запросов: ${spent}, всего за сутки ${ledger.used + spent} из ${DAILY_BUDGET}.`,
+      (skipped ? `Мимо потолка ${MAX_PRODUCTS} прошло ${skipped} карточек. ` : "") +
+      `Потрачено запросов: ${spent}, всего за сутки ${ledger.used + spent} из ${DAILY_BUDGET}. ` +
+      `Обход остановился на теме «${TOPICS[topic % TOPICS.length]}», смещение ${offset}.`,
   );
   console.log(`Снапшот: ${OUT}`);
 }

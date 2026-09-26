@@ -8,7 +8,7 @@ import AuthSheet from "./AuthSheet";
 import InstallBlock from "./InstallBlock";
 import SizeProfileSheet from "./SizeProfileSheet";
 import { toast } from "./Toast";
-import { needsConversion, symbolOf } from "@/lib/money";
+import { formatRate, needsConversion, plural, rateFor, symbolOf } from "@/lib/money";
 import { hasSizes } from "@/lib/sizes";
 import { flushPush } from "@/lib/sync";
 import { useStore } from "@/lib/store";
@@ -18,6 +18,13 @@ const THEMES = [
   { id: "dark", label: "Тёмная", Icon: IconMoon },
   { id: "system", label: "Как в системе", Icon: IconAuto },
 ] as const;
+
+/**
+ * Раздел «Мои размеры» скрыт: сам блок, гайд по размерам и хранение размеров
+ * в профиле оставлены нетронутыми — поменяйте на true, и раздел вернётся на
+ * место таким, каким был.
+ */
+const SHOW_SIZES = false;
 
 export default function SettingsSheet({
   open,
@@ -35,7 +42,7 @@ export default function SettingsSheet({
   const theme = useStore((s) => s.theme);
   const setTheme = useStore((s) => s.setTheme);
   const rates = useStore((s) => s.rates);
-  const setRate = useStore((s) => s.setRate);
+  const rateInfo = useStore((s) => s.rateInfo);
   const stats = useStore((s) => s.stats);
   const resetAll = useStore((s) => s.resetAll);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -58,7 +65,7 @@ export default function SettingsSheet({
       <p className="mb-2 mt-1 text-[12px] font-bold uppercase tracking-wider text-[var(--color-muted)]">Аккаунт</p>
       {account ? (
         <div className="soft-shadow flex items-center gap-3 rounded-2xl bg-[var(--color-surface)] px-4 py-3.5">
-          <span className="brand-gradient flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white">
+          <span className="brand-gradient flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
             <IconUser className="h-5 w-5" />
           </span>
           <span className="min-w-0 flex-1">
@@ -164,28 +171,27 @@ export default function SettingsSheet({
           <p className="mb-2 mt-6 text-[12px] font-bold uppercase tracking-wider text-[var(--color-muted)]">
             Курс пересчёта в рубли
           </p>
-          <div className="soft-shadow space-y-2 rounded-2xl bg-[var(--color-surface)] px-4 py-3.5">
+          {/* Раньше курс вводили руками, и он устаревал в тот же день. Теперь
+              приложение берёт его у Центробанка, а здесь остаётся справка. */}
+          <div className="soft-shadow space-y-1.5 rounded-2xl bg-[var(--color-surface)] px-4 py-3.5">
             {currencies.map((c) => (
-              <label key={c} className="flex items-center gap-3">
-                <span className="w-14 text-[14px] font-semibold">1 {symbolOf(c)} =</span>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0.1"
-                  value={rates[c]}
-                  onChange={(e) => setRate(c, Number(e.target.value))}
-                  className="tnum flex-1 rounded-xl bg-[var(--color-surface-2)] px-3 py-2 text-[15px] outline-none"
-                />
-                <span className="text-[14px] text-[var(--color-muted)]">₽</span>
-              </label>
+              <div key={c} className="flex items-baseline justify-between gap-3">
+                <span className="text-[14px] font-semibold">1 {symbolOf(c)}</span>
+                <span className="tnum text-[15px] font-bold">{formatRate(rateFor(c, rates))} ₽</span>
+              </div>
             ))}
             <p className="pt-1 text-[12px] leading-snug text-[var(--color-muted)]">
-              Курсы задаются вручную. Доставка и комиссии в расчёт не входят.
+              {rateInfo?.date
+                ? `Курс ${rateInfo.source} на ${new Date(rateInfo.date).toLocaleDateString("ru-RU")}, обновляется сам.`
+                : "Курс подтягивается сам, из Центробанка."}{" "}
+              Доставка и комиссии в расчёт не входят.
             </p>
           </div>
         </>
       )}
 
+      {SHOW_SIZES && (
+        <>
       <p className="mb-2 mt-6 text-[12px] font-bold uppercase tracking-wider text-[var(--color-muted)]">Профиль</p>
       <button
         type="button"
@@ -207,6 +213,8 @@ export default function SettingsSheet({
         </span>
         <IconChevron className="h-5 w-5 shrink-0 text-[var(--color-muted)]" />
       </button>
+        </>
+      )}
 
       <p className="mb-2 mt-6 text-[12px] font-bold uppercase tracking-wider text-[var(--color-muted)]">Статистика</p>
       <div className="soft-shadow grid grid-cols-3 gap-px overflow-hidden rounded-2xl bg-[var(--color-line)]">
@@ -229,7 +237,10 @@ export default function SettingsSheet({
             <Mark className="h-8 w-8 shrink-0" id="set-mark" />
             <div className="min-w-0">
               <p className="truncate text-[14px] font-semibold">{sourceLabel || "Своя база"}</p>
-              <p className="tnum text-[12px] text-[var(--color-muted)]">{catalogSize} карточек</p>
+              <p className="tnum text-[12px] text-[var(--color-muted)]">
+                {/* Пять цифр подряд читаются плохо, а «21 карточек» — ещё хуже. */}
+                {catalogSize.toLocaleString("ru-RU")} {plural(catalogSize, "карточка", "карточки", "карточек")}
+              </p>
             </div>
           </div>
         </>
