@@ -5,11 +5,10 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Img from "@/components/Img";
 import ProductSheet from "@/components/ProductSheet";
-import SettingsSheet from "@/components/SettingsSheet";
-import { IconCart, IconExternal, IconGear, IconTrash } from "@/components/Icons";
+import { IconCart, IconExternal, IconTrash } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { cartTotals, unitPrice, useHydrated, useStore } from "@/lib/store";
-import { formatNative, formatRub, needsConversion, plural, symbolOf, toRub } from "@/lib/money";
+import { formatNative, formatRate, formatRub, needsConversion, plural, rateFor, symbolOf, toRub } from "@/lib/money";
 import type { Product } from "@/lib/types";
 
 export default function CartPage() {
@@ -20,7 +19,6 @@ export default function CartPage() {
   const removeFromCart = useStore((s) => s.removeFromCart);
   const clearCart = useStore((s) => s.clearCart);
   const [sheet, setSheet] = useState<Product | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   if (!hydrated) return <div className="flex-1" />;
 
@@ -112,17 +110,13 @@ export default function CartPage() {
             </AnimatePresence>
 
             {convertible.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setSettingsOpen(true)}
-                className="soft-shadow flex w-full items-center gap-2 rounded-2xl bg-[var(--color-surface)] px-4 py-3 text-left text-[13px]"
-              >
-                <IconGear className="h-4 w-4 shrink-0 text-[var(--color-muted)]" />
-                <span className="text-[var(--color-muted)]">Курс: </span>
+              // Не кнопка: править курс больше негде, он приходит от Центробанка.
+              <div className="soft-shadow flex w-full items-baseline gap-2 rounded-2xl bg-[var(--color-surface)] px-4 py-3 text-left text-[13px]">
+                <span className="shrink-0 text-[var(--color-muted)]">Курс ЦБ:</span>
                 <span className="tnum font-semibold">
-                  {convertible.map((c) => `1 ${symbolOf(c)} = ${rates[c]} ₽`).join(" · ")}
+                  {convertible.map((c) => `1 ${symbolOf(c)} = ${formatRate(rateFor(c, rates))} ₽`).join(" · ")}
                 </span>
-              </button>
+              </div>
             )}
           </div>
 
@@ -176,7 +170,6 @@ export default function CartPage() {
       )}
 
       <ProductSheet product={sheet} onClose={() => setSheet(null)} />
-      <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} sourceLabel="" catalogSize={0} />
     </div>
   );
 }

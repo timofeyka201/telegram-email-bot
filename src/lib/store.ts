@@ -36,7 +36,6 @@ export type SyncedProfile = {
   watch: Record<string, PriceWatch>;
   rejected: string[];
   stats: Stats;
-  rates: Record<string, number>;
   tasted: boolean;
   updatedAt: number;
 };
@@ -53,7 +52,7 @@ export const DAILY_GOAL = 20;
  */
 export const ASK_REASON_EVERY = 200;
 
-/** Лента бесконечна, поэтому просмотренные карточки periodically выбрасываем. */
+/** Лента бесконечна, поэтому просмотренные карточки время от времени выбрасываем. */
 const KEEP_BEHIND = 12;
 const TRIM_AT = 60;
 
@@ -69,6 +68,8 @@ type State = {
   history: HistoryEntry[];
   stats: Stats;
   rates: Record<string, number>;
+  /** Откуда и на какой день взят курс — для подписи под ценой. */
+  rateInfo: { date: string | null; source: string } | null;
   query: string;
   filters: Filters;
   theme: "system" | "light" | "dark";
@@ -113,7 +114,8 @@ type State = {
   setQty: (id: string, qty: number) => void;
   removeFromCart: (id: string) => void;
   clearCart: () => void;
-  setRate: (currency: string, rate: number) => void;
+  /** Курс приехал с сервера: он общий для всех и руками не правится. */
+  setRates: (rates: Record<string, number>, info: { date: string | null; source: string }) => void;
   setFilters: (filters: Filters) => void;
   setTheme: (theme: "system" | "light" | "dark") => void;
   finishOnboarding: () => void;
@@ -138,6 +140,7 @@ export const useStore = create<State>()(
       history: [],
       stats: emptyStats(),
       rates: { ...DEFAULT_RATES },
+      rateInfo: null,
       query: "",
       filters: {},
       theme: "system",
@@ -172,7 +175,6 @@ export const useStore = create<State>()(
           watch: s.watch,
           rejected: s.rejected,
           stats: s.stats,
-          rates: s.rates,
           tasted: s.tasted,
           updatedAt: s.updatedAt,
         };
@@ -193,7 +195,6 @@ export const useStore = create<State>()(
           watch: profile.watch ?? {},
           rejected: profile.rejected ?? [],
           stats: profile.stats ?? emptyStats(),
-          rates: profile.rates ?? { ...DEFAULT_RATES },
           tasted: profile.tasted ?? false,
           updatedAt: profile.updatedAt ?? Date.now(),
           // Лента пересобирается: чужие отказы и вкусы меняют выдачу.
@@ -352,7 +353,8 @@ export const useStore = create<State>()(
 
       clearCart: () => set({ cart: [], updatedAt: Date.now() }),
 
-      setRate: (currency, rate) => set((s) => ({ rates: { ...s.rates, [currency]: rate > 0 ? rate : 1 } })),
+      setRates: (rates, info) =>
+        set((s) => ({ rates: { ...s.rates, ...rates, RUB: 1 }, rateInfo: info })),
 
       setFilters: (filters) =>
         set((s) => ({
@@ -479,7 +481,10 @@ export const useStore = create<State>()(
         rejected: s.rejected.slice(0, 2000),
         cart: s.cart,
         stats: s.stats,
+        // Последний известный курс переживает перезагрузку: цены видны сразу,
+        // не дожидаясь ответа сервера.
         rates: s.rates,
+        rateInfo: s.rateInfo,
         query: s.query,
         filters: s.filters,
         theme: s.theme,

@@ -112,7 +112,6 @@ function merge(local: SyncedProfile, remote: SyncedProfile): SyncedProfile {
       likes: Math.max(local.stats?.likes ?? 0, remote.stats?.likes ?? 0),
       bestStreak: Math.max(local.stats?.bestStreak ?? 0, remote.stats?.bestStreak ?? 0),
     },
-    rates: { ...(stale.rates ?? {}), ...(fresh.rates ?? {}) },
     tasted: (local.tasted ?? false) || (remote.tasted ?? false),
     updatedAt: Date.now(),
   };
