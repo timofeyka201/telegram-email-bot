@@ -31,9 +31,32 @@ export function aeConfigured(): boolean {
   return !!(process.env.AE_CLIENT_ID?.trim() && process.env.AE_CLIENT_SECRET?.trim());
 }
 
-/** Идентификатор партнёра: без него не собрать пути вида /users/{userId}/… */
-export function aeUserId(): string | null {
-  return process.env.AE_USER_ID?.trim() || null;
+/**
+ * Полезная нагрузка JWT. Подпись не проверяем: токен выдала нам сама площадка,
+ * и читаем мы его только ради user_id, который иначе пришлось бы искать в
+ * кабинете и переписывать руками.
+ */
+function claims(jwt: string): Record<string, unknown> | null {
+  try {
+    return JSON.parse(Buffer.from(jwt.split(".")[1], "base64url").toString("utf8")) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Идентификатор партнёра: без него не собрать пути вида /users/{userId}/…
+ * Берём из настроек, а если их нет — из самого токена.
+ */
+export async function aeUserId(): Promise<string | null> {
+  const configured = process.env.AE_USER_ID?.trim();
+  if (configured) return configured;
+  try {
+    const id = claims((await aeToken()).token)?.user_id;
+    return id ? String(id) : null;
+  } catch {
+    return null;
+  }
 }
 
 function tokenPath(): string {

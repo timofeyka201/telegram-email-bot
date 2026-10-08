@@ -64,6 +64,33 @@ export async function noteClick(productId: string, outcome: "affiliate" | "direc
 
 type CreativeResponse = { targetLink?: string; eridToken?: string; article?: string };
 
+let placementMemo: string | null = null;
+
+/**
+ * Площадка, к которой привязываются креативы. Её можно задать настройкой, но
+ * искать идентификатор в кабинете не обязательно: платформа перечисляет свои
+ * активные площадки сама, и если она одна — выбирать не из чего.
+ */
+async function placement(userId: string): Promise<string | null> {
+  const configured = process.env.AE_PLACEMENT_ID?.trim();
+  if (configured) return configured;
+  if (placementMemo) return placementMemo;
+  try {
+    const res = await aeFetch<{ placements?: { id?: string | number; title?: string }[] }>(
+      `/api/v1/users/${userId}/placements/active`,
+    );
+    const first = res.placements?.[0]?.id;
+    if (first === undefined) {
+      console.error("У партнёра нет активных площадок — партнёрские ссылки создавать не на что.");
+      return null;
+    }
+    return (placementMemo = String(first));
+  } catch (e) {
+    console.error("Список площадок не получен:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
 /**
  * Партнёрская ссылка на товар. Возвращает null, если платформа не настроена
  * или отказала: в этом случае человека отправляем на обычную ссылку товара —
@@ -74,9 +101,10 @@ export async function affiliateLink(productId: string, url: string, title: strin
   const hit = cache[productId];
   if (hit) return hit;
 
-  const userId = aeUserId();
-  const placementId = process.env.AE_PLACEMENT_ID?.trim();
-  if (!aeConfigured() || !userId || !placementId) return null;
+  if (!aeConfigured()) return null;
+  const userId = await aeUserId();
+  const placementId = userId ? await placement(userId) : null;
+  if (!userId || !placementId) return null;
 
   const pending = inFlight.get(productId);
   if (pending) return pending;

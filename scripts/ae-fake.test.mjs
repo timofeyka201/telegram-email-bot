@@ -70,7 +70,10 @@ createServer(async (req, res) => {
       return json(res, 401, { error: "invalid_client", error_description: "Client authentication failed" });
     }
     // Новый токен убивает прежний — ровно как на настоящей платформе.
-    issued = `tok-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const payload = Buffer.from(
+      JSON.stringify({ user_id: 7777, user_role: "kol", client_id: form.get("client_id") ?? "basic" }),
+    ).toString("base64url");
+    issued = `eyJhbGciOiJIUzUxMiJ9.${payload}.${Math.random().toString(36).slice(2, 10)}`;
     return json(res, 200, {
       access_token: issued,
       token_type: "jwt",

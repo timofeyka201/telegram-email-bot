@@ -67,6 +67,20 @@ function writeLedger(l) {
 }
 
 // ------------------------------------------------------------- разбор
+/**
+ * Полезная нагрузка JWT. Подпись не проверяем — токен выдала нам сама
+ * площадка минуту назад, и читаем мы его только чтобы показать человеку,
+ * какой у него user_id.
+ */
+function readClaims(jwt) {
+  try {
+    const part = String(jwt).split(".")[1];
+    return JSON.parse(Buffer.from(part, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
 /** Достаём значение по первому подошедшему имени; «store.name» — тоже имя. */
 function pick(obj, ...names) {
   for (const name of names) {
@@ -187,6 +201,19 @@ async function listFeeds() {
     .filter((f) => f.id);
 }
 
+/**
+ * Активные площадки партнёра. Их идентификатор нужен для создания
+ * партнёрских ссылок, а в кабинете он показан не везде — API называет его
+ * сам, и это самый надёжный способ его узнать.
+ */
+async function listPlacements(userId) {
+  const data = await call(`/api/v1/users/${userId}/placements/active`);
+  return (data?.placements ?? data?.data ?? []).map((p) => ({
+    id: String(pick(p, "id", "placementId", "attributes.id") ?? ""),
+    title: String(pick(p, "title", "name", "url", "attributes.title") ?? "без названия"),
+  }));
+}
+
 /** Справочник категорий фида: один запрос на фид, зато карточки с названиями. */
 async function listCategories(feedId) {
   const out = new Map();
@@ -233,6 +260,37 @@ async function main() {
   if (CHECK) {
     const auth = await token();
     console.log("Токен получен. Права:", auth.scope || "(платформа не назвала)");
+
+    // Идентификатор партнёра зашит в сам токен — значит, его не нужно искать
+    // в кабинете и легко сверить с тем, что записано в настройках.
+    const claims = readClaims(auth.token);
+    if (claims?.user_id) {
+      const configured = env.AE_USER_ID;
+      console.log(
+        `Ваш user_id по токену: ${claims.user_id}` +
+          (configured && String(configured) !== String(claims.user_id)
+            ? ` — а в настройках записан ${configured}. Это расхождение, поправьте AE_USER_ID.`
+            : ""),
+      );
+    }
+
+    const userId = String(claims?.user_id ?? env.AE_USER_ID ?? "");
+    if (userId) {
+      try {
+        const placements = await listPlacements(userId);
+        if (placements.length) {
+          console.log("Площадки (их id годится для AE_PLACEMENT_ID):");
+          for (const p of placements) console.log(`  ${p.id} — ${p.title}`);
+        } else {
+          console.log("Активных площадок нет. Партнёрские ссылки без площадки не создаются:");
+          console.log("  заведите её в кабинете (Инструменты → Площадки) и дождитесь активации.");
+        }
+      } catch (e) {
+        console.log(`Список площадок не получен: ${e.message}`);
+        console.log("  Каталогу это не мешает — площадка нужна только для партнёрских ссылок.");
+      }
+    }
+
     const feeds = await listFeeds();
     console.log(`Фидов доступно: ${feeds.length}`);
     for (const f of feeds.slice(0, 10)) console.log(`  ${f.id} — ${f.title}`);
