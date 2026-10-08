@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile, appendFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { aeConfigured, aeFetch, aeUserId } from "./client";
+import { AeError, aeConfigured, aeFetch, aeUserId } from "./client";
 
 /**
  * Партнёрские ссылки AliExpress.
@@ -62,7 +62,29 @@ export async function noteClick(productId: string, outcome: "affiliate" | "direc
   }
 }
 
-type CreativeResponse = { targetLink?: string; eridToken?: string; article?: string };
+/**
+ * Ответ площадки на создание креатива. Фиды приходят в обёртке JSON:API
+ * (data.attributes), и здесь может быть так же, поэтому ссылку ищем во всех
+ * местах, где она может лежать, а не только там, где обещано в документации.
+ */
+function findLink(body: unknown): { target?: string; erid?: string } {
+  const paths = [
+    ["targetLink"],
+    ["data", "targetLink"],
+    ["data", "attributes", "targetLink"],
+    ["creative", "targetLink"],
+    ["creatives", "0", "targetLink"],
+    ["creatives", "0", "attributes", "targetLink"],
+  ];
+  const at = (path: string[]): unknown =>
+    path.reduce<unknown>((value, key) => (value as Record<string, unknown>)?.[key], body);
+
+  const target = paths.map(at).find((v) => typeof v === "string" && v);
+  const erid = [["eridToken"], ["data", "eridToken"], ["data", "attributes", "eridToken"]]
+    .map(at)
+    .find((v) => typeof v === "string" && v);
+  return { target: target as string | undefined, erid: erid as string | undefined };
+}
 
 let placementMemo: string | null = null;
 
@@ -76,10 +98,11 @@ async function placement(userId: string): Promise<string | null> {
   if (configured) return configured;
   if (placementMemo) return placementMemo;
   try {
-    const res = await aeFetch<{ placements?: { id?: string | number; title?: string }[] }>(
-      `/api/v1/users/${userId}/placements/active`,
-    );
-    const first = res.placements?.[0]?.id;
+    const res = await aeFetch<{
+      placements?: { id?: string | number }[];
+      data?: { id?: string | number }[];
+    }>(`/api/v1/users/${userId}/placements/active`);
+    const first = (res.placements ?? res.data ?? [])[0]?.id;
     if (first === undefined) {
       console.error("У партнёра нет активных площадок — партнёрские ссылки создавать не на что.");
       return null;
@@ -111,7 +134,7 @@ export async function affiliateLink(productId: string, url: string, title: strin
 
   const task = (async () => {
     try {
-      const res = await aeFetch<CreativeResponse>(`/api/v1/users/${userId}/creative`, {
+      const res = await aeFetch<unknown>(`/api/v1/users/${userId}/creative`, {
         method: "POST",
         body: {
           link: url,
@@ -123,13 +146,23 @@ export async function affiliateLink(productId: string, url: string, title: strin
           creationConditions: { createLinks: true, createArticles: false },
         },
       });
-      if (!res.targetLink) return null;
-      const creative: Creative = { target: res.targetLink, erid: res.eridToken, createdAt: Date.now() };
+      const { target, erid } = findLink(res);
+      if (!target) {
+        // Креатив, похоже, создан, но ссылку мы в ответе не нашли. Показываем
+        // ответ целиком: иначе каждый переход будет создавать креатив заново,
+        // а человек всё равно уйдёт по обычной ссылке.
+        console.error("В ответе площадки нет targetLink:", JSON.stringify(res).slice(0, 600));
+        return null;
+      }
+      const creative: Creative = { target, erid, createdAt: Date.now() };
       (await readCache())[productId] = creative;
       await saveCache();
       return creative;
     } catch (e) {
       console.error("Партнёрская ссылка не создана:", e instanceof Error ? e.message : e);
+      // Текст отказа площадки — единственное, по чему видно, какое поле ей не
+      // понравилось.
+      if (e instanceof AeError && e.body) console.error("  ответ площадки:", e.body);
       return null;
     } finally {
       inFlight.delete(productId);

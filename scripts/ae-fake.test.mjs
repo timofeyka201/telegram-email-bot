@@ -167,6 +167,10 @@ createServer(async (req, res) => {
       targetLink: `https://aliclick.shop/r/c/fake${id}?erid=2SDnjdpgvgp`,
       title: parsed.title ?? "креатив",
     };
+    if (mode === "wrapped") {
+      // Та же обёртка, что у фидов: вдруг и креатив приходит так.
+      return json(res, 200, { data: { type: "creative", id: creative.id, attributes: creative } });
+    }
     return json(res, 200, p.endsWith("sub-user") ? { creatives: [creative] } : creative);
   }
 
