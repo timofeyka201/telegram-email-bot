@@ -78,6 +78,19 @@ function credentialsHint(id, secret) {
   notes.push(`длина секрета: ${secret.length}`);
   if (/\s/.test(id) || /\s/.test(secret)) notes.push("ВНУТРИ ЕСТЬ ПРОБЕЛ ИЛИ ПЕРЕНОС СТРОКИ — значение попало в файл не целиком");
   if (secret.length < 60) notes.push("секрет короче ожидаемого: в кабинете он длинный, похоже, скопировалась только часть");
+
+  // Невидимый мусор из буфера обмена: неразрывный пробел, нулевой ширины
+  // знак, кавычки-ёлочки. Длина при этом выглядит правильной, а ключ не
+  // работает — и понять это по сообщению площадки невозможно.
+  const strange = [...`${id}${secret}`].filter((c) => c.charCodeAt(0) < 33 || c.charCodeAt(0) > 126);
+  if (strange.length) {
+    const codes = [...new Set(strange.map((c) => `U+${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`))];
+    notes.push(`в значениях ${strange.length} непечатаемых знаков (${codes.join(", ")}) — при копировании попал мусор`);
+  }
+
+  // Концы значения, чтобы сверить с кабинетом глазами. Шести знаков из
+  // восьмидесяти для подбора не хватит, а опечатку они показывают сразу.
+  if (secret.length > 12) notes.push(`секрет начинается на «${secret.slice(0, 3)}» и кончается на «${secret.slice(-3)}»`);
   return notes.join("; ");
 }
 
