@@ -194,10 +194,14 @@ const feedsOf = (data) => data?.data ?? data?.feeds ?? [];
 /** Предел на размер страницы у этого метода — 30, в отличие от товаров фида. */
 const FEEDS_PAGE = 30;
 
+/** Последний ответ со списком фидов: пригодится, если список окажется пустым. */
+let lastFeedsResponse = null;
+
 async function listFeeds() {
   const out = new Map();
   for (let page = 1; page <= 20; page++) {
     const data = await call("/api/v1/productsfeeds/feeds", { query: { limit: FEEDS_PAGE, page } });
+    if (page === 1) lastFeedsResponse = data;
     const rows = feedsOf(data)
       .map((f) => ({
         id: String(pick(f, "id", "feedId", "productFeedId", "attributes.id") ?? ""),
@@ -330,7 +334,15 @@ async function main() {
     console.log(`Фидов доступно: ${feeds.length}`);
     for (const f of feeds.slice(0, 10)) console.log(`  ${f.id} — ${f.title}`);
     if (!feeds.length) {
-      console.log("Ни одного фида. Проверьте права клиента «Доступ к продуктовым фидам».");
+      // Пустой список и неузнанный формат ответа выглядят одинаково, поэтому
+      // показываем, что именно прислала площадка.
+      console.log("Ни одного фида. Вот что ответила площадка:");
+      console.log(JSON.stringify(lastFeedsResponse, null, 2).slice(0, 1200));
+      console.log("");
+      console.log("Если в ответе пусто — фидов у партнёра действительно нет:");
+      console.log("  заведите продуктовый фид в кабинете AE Platform и дождитесь его сборки.");
+      console.log("Если товары в ответе видны, а список пуст — значит, формат другой:");
+      console.log("  пришлите этот вывод, поправлю разбор. Известный фид можно обойти флагом --feed <id>.");
       return;
     }
     const feedId = String(args.feed || feeds[0].id);

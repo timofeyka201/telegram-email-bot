@@ -96,6 +96,7 @@ createServer(async (req, res) => {
         errors: [{ code: 422001, field: "limit", meta: { message: "Limit должен быть меньше или равно 30" } }],
       });
     }
+    if (mode === "nofeeds") return json(res, 200, { data: [], meta: { total: "0" } });
     const page = Math.max(1, Number(url.searchParams.get("page") ?? 1));
     const slice = FEEDS.slice((page - 1) * limit, page * limit);
     return json(res, 200, { data: slice, meta: { total: String(FEEDS.length) } });
