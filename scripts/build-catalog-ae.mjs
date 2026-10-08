@@ -330,7 +330,9 @@ async function main() {
       }
     }
 
-    const feeds = await listFeeds();
+    // Если номер фида известен, список не спрашиваем вовсе: он может быть
+    // недоступен, а проверить сам фид это не мешает.
+    const feeds = args.feed ? [{ id: String(args.feed), title: "указан флагом" }] : await listFeeds();
     console.log(`Фидов доступно: ${feeds.length}`);
     for (const f of feeds.slice(0, 10)) console.log(`  ${f.id} — ${f.title}`);
     if (!feeds.length) {
