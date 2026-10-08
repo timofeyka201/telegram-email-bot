@@ -64,21 +64,44 @@ async function saveToken(token: AeToken): Promise<void> {
   await rename(tmp, path);
 }
 
+/** Лишние пробелы и кавычки вокруг значения — самая частая причина отказа. */
+const clean = (v?: string): string => (v ?? "").trim().replace(/^["']|["']$/g, "").trim();
+
 async function requestToken(): Promise<AeToken> {
-  const body = new URLSearchParams({
-    grant_type: "client_credentials",
-    client_id: process.env.AE_CLIENT_ID?.trim() ?? "",
-    client_secret: process.env.AE_CLIENT_SECRET?.trim() ?? "",
-  });
-  const res = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-    signal: AbortSignal.timeout(TIMEOUT),
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    throw new Error(`AE Platform не выдал токен (${res.status}): ${(await res.text()).slice(0, 200)}`);
+  const id = clean(process.env.AE_CLIENT_ID);
+  const secret = clean(process.env.AE_CLIENT_SECRET);
+
+  // Документация описывает передачу ключей параметрами тела. Если площадка
+  // отвечает «invalid_client», пробуем второй стандартный способ — заголовок
+  // Basic: по ответу не понять, какой из них она ждёт.
+  const attempts = [
+    {
+      headers: {} as Record<string, string>,
+      body: new URLSearchParams({ grant_type: "client_credentials", client_id: id, client_secret: secret }),
+    },
+    {
+      headers: { Authorization: `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}` },
+      body: new URLSearchParams({ grant_type: "client_credentials" }),
+    },
+  ];
+
+  let res: Response | null = null;
+  let last = "";
+  for (const attempt of attempts) {
+    res = await fetch(TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", ...attempt.headers },
+      body: attempt.body,
+      signal: AbortSignal.timeout(TIMEOUT),
+      cache: "no-store",
+    });
+    if (res.ok) break;
+    last = (await res.text()).slice(0, 200);
+    if (!/invalid_client|unauthorized|authentication/i.test(last) || res.status >= 500) break;
+    res = null;
+  }
+  if (!res?.ok) {
+    throw new Error(`AE Platform не выдал токен: ${last}`);
   }
   const data = (await res.json()) as { access_token?: string; expires_in?: string | number; scope?: string };
   if (!data.access_token) throw new Error("AE Platform вернул ответ без токена");

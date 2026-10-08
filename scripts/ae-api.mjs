@@ -64,26 +64,73 @@ function saveToken(token) {
 /** Счётчик запросов за прогон: по нему считается расход дневного бюджета. */
 export const spent = { calls: 0 };
 
+/** Лишние пробелы и кавычки вокруг значения — самая частая причина отказа. */
+const clean = (v) => String(v ?? "").trim().replace(/^["']|["']$/g, "").trim();
+
+/**
+ * Подсказка к отказу «invalid_client»: платформа не говорит, что именно не
+ * понравилось, а причина почти всегда в том, как ключ попал в файл. Сами
+ * значения не печатаем — только их приметы.
+ */
+function credentialsHint(id, secret) {
+  const notes = [];
+  notes.push(`длина client_id: ${id.length}${/^\d+$/.test(id) ? "" : " (не только цифры)"}`);
+  notes.push(`длина секрета: ${secret.length}`);
+  if (/\s/.test(id) || /\s/.test(secret)) notes.push("ВНУТРИ ЕСТЬ ПРОБЕЛ ИЛИ ПЕРЕНОС СТРОКИ — значение попало в файл не целиком");
+  if (secret.length < 60) notes.push("секрет короче ожидаемого: в кабинете он длинный, похоже, скопировалась только часть");
+  return notes.join("; ");
+}
+
 async function requestToken() {
-  if (!env.AE_CLIENT_ID || !env.AE_CLIENT_SECRET) {
+  const id = clean(env.AE_CLIENT_ID);
+  const secret = clean(env.AE_CLIENT_SECRET);
+  if (!id || !secret) {
     throw new Error("Не заданы AE_CLIENT_ID и AE_CLIENT_SECRET (кабинет AE Platform → Мой профиль → Client credentials)");
   }
-  const body = new URLSearchParams({
-    grant_type: "client_credentials",
-    client_id: env.AE_CLIENT_ID,
-    client_secret: env.AE_CLIENT_SECRET,
-  });
-  spent.calls += 1;
-  const res = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-    signal: AbortSignal.timeout(TIMEOUT),
-  });
-  if (!res.ok) {
-    throw new Error(`Токен не выдан (${res.status}): ${(await res.text()).slice(0, 300)}`);
+
+  const body = new URLSearchParams({ grant_type: "client_credentials", client_id: id, client_secret: secret });
+
+  // Сначала так, как написано в документации — параметрами тела. Если
+  // площадка отвечает «invalid_client», пробуем второй стандартный способ:
+  // те же данные в заголовке Basic. Какой из них ждёт сервер, по ответу не
+  // понять, а стоит попытка один запрос.
+  const attempts = [
+    { label: "в теле запроса", headers: {}, body },
+    {
+      label: "заголовком Basic",
+      headers: { Authorization: `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}` },
+      body: new URLSearchParams({ grant_type: "client_credentials" }),
+    },
+  ];
+
+  let last = "";
+  for (const attempt of attempts) {
+    spent.calls += 1;
+    const res = await fetch(TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", ...attempt.headers },
+      body: attempt.body,
+      signal: AbortSignal.timeout(TIMEOUT),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return finishToken(data);
+    }
+    last = (await res.text()).slice(0, 300);
+    // 401 и 400 с «invalid_client» — повод попробовать другой способ,
+    // остальное бессмысленно повторять.
+    if (!/invalid_client|unauthorized|authentication/i.test(last) || res.status >= 500) {
+      throw new Error(`Токен не выдан (${res.status}): ${last}`);
+    }
+    console.error(`  способ «${attempt.label}» не подошёл: ${res.status}`);
   }
-  const data = await res.json();
+
+  throw new Error(
+    `Токен не выдан: ${last}\n  Площадка не приняла ни данные в теле запроса, ни заголовок Basic.\n  ${credentialsHint(id, secret)}\n  Проверьте: клиент активен в кабинете, права выданы, почта подтверждена, а значения скопированы целиком.`,
+  );
+}
+
+function finishToken(data) {
   if (!data.access_token) throw new Error("Ответ без токена");
   const seconds = Number(data.expires_in) > 0 ? Number(data.expires_in) : 1800;
   const token = {

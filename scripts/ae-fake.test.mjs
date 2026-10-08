@@ -54,8 +54,20 @@ createServer(async (req, res) => {
     let body = "";
     for await (const chunk of req) body += chunk;
     const form = new URLSearchParams(body);
-    if (form.get("grant_type") !== "client_credentials" || !form.get("client_id") || !form.get("client_secret")) {
-      return json(res, 400, { error: "bad request" });
+    if (form.get("grant_type") !== "client_credentials") return json(res, 400, { error: "bad request" });
+
+    // Площадка может требовать ключи заголовком Basic, а не в теле: режим
+    // «basic» проверяет, что клиент это переживает.
+    const basic = (req.headers.authorization ?? "").startsWith("Basic ");
+    if (mode === "basic" && !basic) {
+      return json(res, 401, { error: "invalid_client", error_description: "Client authentication failed" });
+    }
+    // Неверные ключи: ровно тот ответ, который видит человек с опечаткой.
+    if (mode === "badkey") {
+      return json(res, 401, { error: "invalid_client", error_description: "Client authentication failed" });
+    }
+    if (!basic && (!form.get("client_id") || !form.get("client_secret"))) {
+      return json(res, 401, { error: "invalid_client", error_description: "Client authentication failed" });
     }
     // Новый токен убивает прежний — ровно как на настоящей платформе.
     issued = `tok-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
