@@ -97,9 +97,14 @@ createServer(async (req, res) => {
       });
     }
     if (mode === "nofeeds") return json(res, 200, { data: [], meta: { total: "0" } });
-    const page = Math.max(1, Number(url.searchParams.get("page") ?? 1));
-    const slice = FEEDS.slice((page - 1) * limit, page * limit);
-    return json(res, 200, { data: slice, meta: { total: String(FEEDS.length) } });
+    // Нумерация страниц с нуля: при page=1 первая страница уже пропущена.
+    // Ровно так повела себя настоящая площадка — 12 фидов и пустой ответ.
+    const zero = mode === "zeropage";
+    const raw = url.searchParams.get("page");
+    const page = raw === null ? (zero ? 0 : 1) : Number(raw);
+    const index = zero ? page : Math.max(0, page - 1);
+    const slice = FEEDS.slice(index * limit, (index + 1) * limit);
+    return json(res, 200, { data: slice, meta: { total: FEEDS.length } });
   }
 
   if (p === "/api/v1/productsfeeds/categories") {

@@ -199,20 +199,39 @@ let lastFeedsResponse = null;
 
 async function listFeeds() {
   const out = new Map();
-  for (let page = 1; page <= 20; page++) {
-    const data = await call("/api/v1/productsfeeds/feeds", { query: { limit: FEEDS_PAGE, page } });
-    if (page === 1) lastFeedsResponse = data;
+  let total;
+
+  /**
+   * Первый запрос идёт без номера страницы — так показано в документации, и
+   * так площадка отдаёт начало списка независимо от того, с нуля у неё
+   * нумерация или с единицы. Дальше номера перебираем, а повторы схлопываются
+   * по идентификатору: ошибиться на единицу дешевле, чем потерять фид.
+   */
+  for (let step = 0; step <= 20; step++) {
+    const query = { limit: FEEDS_PAGE };
+    if (step > 0) query.page = step;
+    const data = await call("/api/v1/productsfeeds/feeds", { query });
+    if (step === 0) lastFeedsResponse = data;
+
     const rows = feedsOf(data)
       .map((f) => ({
         id: String(pick(f, "id", "feedId", "productFeedId", "attributes.id") ?? ""),
         title: String(pick(f, "title", "name", "attributes.title") ?? "без названия"),
       }))
       .filter((f) => f.id);
-    for (const row of rows) out.set(row.id, row);
 
-    const total = num(pick(data ?? {}, "meta.total", "total"));
-    // Хватит, когда страница пришла неполной или собрали всё, что обещано.
-    if (rows.length < FEEDS_PAGE || (total !== undefined && out.size >= total)) break;
+    const before = out.size;
+    for (const row of rows) out.set(row.id, row);
+    total ??= num(pick(data ?? {}, "meta.total", "total"));
+
+    // Хватит, когда собрали всё обещанное или очередная страница не принесла
+    // ничего нового.
+    if (total !== undefined && out.size >= total) break;
+    if (step > 0 && out.size === before) break;
+  }
+
+  if (total !== undefined && out.size < total) {
+    console.log(`Площадка обещает ${total} фидов, а отдала ${out.size} — работаем с тем, что пришло.`);
   }
   return [...out.values()];
 }
