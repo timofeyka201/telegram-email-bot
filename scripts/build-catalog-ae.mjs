@@ -106,59 +106,83 @@ function num(value) {
  * вариантов: ошибиться с ценой хуже, чем перечислить лишнее имя.
  */
 function money(raw, ...names) {
-  const cents = num(pick(raw, ...names.map((n) => `${n}Cents`)));
+  // {"price": {"cents": 11000, "currency": "RUB"}} — так отдаёт фид.
+  const cents = num(pick(raw, ...names.map((n) => `${n}.cents`), ...names.map((n) => `${n}Cents`)));
   if (cents !== undefined) return Math.round(cents) / 100;
   const plain = num(pick(raw, ...names, ...names.map((n) => `${n}.value`), ...names.map((n) => `${n}.amount`)));
   return plain;
 }
 
 function images(raw) {
-  const list = pick(raw, "images", "imageUrls", "pictures", "productImages", "gallery");
+  const list = pick(raw, "imageGallery", "images", "imageUrls", "pictures", "productImages", "gallery");
   const many = Array.isArray(list)
     ? list.map((i) => (typeof i === "string" ? i : pick(i ?? {}, "url", "imageUrl", "src"))).filter(Boolean)
     : [];
-  const single = pick(raw, "image", "imageUrl", "mainImage", "productImage", "mainImageUrl", "picture");
+  const single = pick(raw, "imageURL", "image", "imageUrl", "mainImage", "productImage", "mainImageUrl", "picture");
   const all = many.length ? many : single ? [single] : [];
   // Фид отдаёт адреса без схемы («//ae01.alicdn.com/…») — браузер такое поймёт,
   // а наш загрузчик картинок нет.
   return [...new Set(all.map((u) => String(u).replace(/^\/\//, "https://")))].slice(0, 8);
 }
 
-/** AE Platform → карточка приложения. */
-function toProduct(raw, categories) {
-  const id = pick(raw, "productId", "product_id", "itemId", "id");
+/**
+ * Категория товара в фиде не приходит — её заменяет сам фид. Названия у них
+ * длинные («Дом, сад и офис. Обустройство дома и инструменты. Бытовая
+ * техника»), а в ленте это подпись на кнопке фильтра, поэтому берём первую
+ * часть.
+ */
+function shortCategory(feedTitle) {
+  const head = String(feedTitle ?? "").split(/[.;]/)[0].trim();
+  if (!head) return undefined;
+  return head.length <= 28 ? head : head.split(",")[0].trim().slice(0, 28);
+}
+
+/**
+ * AE Platform → карточка приложения.
+ *
+ * Фид отдаёт товар в формате JSON:API: сам товар лежит в attributes, цена —
+ * объектом с суммой в копейках, картинки — отдельной галереей. Прежние имена
+ * полей оставлены запасными: у разных фидов попадаются и они.
+ */
+function toProduct(row, feedTitle) {
+  const a = row?.attributes ?? row ?? {};
+  // Идентификатор берём товарный, а не строковый ключ курсора («0_1005…»):
+  // по нему же строится ссылка на карточку AliExpress.
+  const id = pick(a, "itemId", "productId", "product_id") ?? String(pick(row ?? {}, "id") ?? "").split("_").pop();
   if (!id) return null;
-  const price = money(raw, "salePrice", "price", "appSalePrice", "targetSalePrice", "minPrice");
-  const was = money(raw, "originalPrice", "oldPrice", "listPrice", "maxPrice");
-  const categoryId = pick(raw, "categoryId", "category_id", "firstLevelCategoryId");
-  const link = pick(raw, "productUrl", "link", "url", "productDetailUrl", "targetLink");
-  const rating = num(pick(raw, "rating", "evaluateRate", "averageStar", "score"));
+
+  const price = money(a, "price", "salePrice", "appSalePrice", "targetSalePrice", "minPrice");
+  const was = money(a, "originalPrice", "oldPrice", "priceWithoutDiscount", "listPrice", "maxPrice");
+  const rating = num(pick(a, "rating", "evaluateRate", "averageStar", "score"));
+  const link = pick(a, "pageURL", "productUrl", "link", "url", "productDetailUrl");
+  const storeName = pick(a, "store.title", "store.name", "storeName", "shopName", "seller.name");
 
   return {
     id: `ae-${id}`,
-    title: String(pick(raw, "title", "productTitle", "name", "subject") ?? "").slice(0, 200),
-    description: String(pick(raw, "description", "shortDescription") ?? "").slice(0, 4000),
+    title: String(pick(a, "title", "productTitle", "name", "subject") ?? "").slice(0, 200),
+    description: String(pick(a, "description", "shortDescription") ?? "").slice(0, 4000),
     url: String(link ?? `https://aliexpress.ru/item/${id}.html`),
-    images: images(raw),
+    images: images(a),
     price,
     // «Было» показываем только если оно и правда больше текущей цены.
     priceMax: was !== undefined && price !== undefined && was > price ? was : undefined,
-    currency: String(pick(raw, "currency", "currencyCode") ?? "RUB"),
-    category: categories.get(String(categoryId)) ?? (categoryId ? `cat-${categoryId}` : undefined),
-    brand: pick(raw, "brand", "brandName") ?? undefined,
-    rating: rating !== undefined && rating <= 5 ? rating : rating !== undefined ? rating / 20 : undefined,
-    reviewsCount: num(pick(raw, "evaluationsCount", "reviewsCount", "feedbackCount")),
-    soldCount: num(pick(raw, "purchasesAmount", "salesCount", "orders", "volume")),
+    currency: String(pick(a, "price.currency", "currency", "currencyCode") ?? "RUB"),
+    category: shortCategory(feedTitle),
+    brand: pick(a, "brand", "brandName") ?? undefined,
+    // Рейтинг у площадки по пятибалльной шкале; сотенную встречаем на всякий случай.
+    rating: rating !== undefined && rating > 5 ? rating / 20 : rating,
+    reviewsCount: num(pick(a, "evaluationsCount", "reviewsCount", "feedbackCount")),
+    soldCount: num(pick(a, "purchasesAmount", "salesCount", "orders", "volume")),
     minOrder: 1,
-    seller: (() => {
-      const name = pick(raw, "store.name", "storeName", "shopName", "store.title", "seller.name");
-      if (!name) return undefined;
-      const locality = pick(raw, "localityType", "sellerType", "store.localityType");
-      return {
-        name: String(name),
-        location: locality === "onlyLocal" || locality === "ru_site" ? "Россия" : undefined,
-      };
-    })(),
+    seller: storeName
+      ? {
+          name: String(storeName),
+          // Российский продавец — это быстрая доставка, и человеку это важнее
+          // всего остального, что мы знаем о магазине.
+          location: pick(a, "isLocal") === true ? "Россия" : undefined,
+          url: pick(a, "store.url") ?? undefined,
+        }
+      : undefined,
     attributes: [],
     reviews: [],
     skus: [],
@@ -250,22 +274,6 @@ async function listPlacements(userId) {
         "без названия",
     ),
   }));
-}
-
-/** Справочник категорий фида: один запрос на фид, зато карточки с названиями. */
-async function listCategories(feedId) {
-  const out = new Map();
-  try {
-    const data = await call("/api/v1/productsfeeds/categories", { query: { productFeedId: feedId } });
-    for (const c of data?.data ?? data?.categories ?? []) {
-      const id = pick(c, "id", "categoryId", "attributes.id");
-      const title = pick(c, "title", "name", "attributes.title", "attributes.name");
-      if (id && title) out.set(String(id), String(title));
-    }
-  } catch (e) {
-    console.error("Категории фида не получены:", e.message);
-  }
-  return out;
 }
 
 /**
@@ -373,7 +381,7 @@ async function main() {
     if (first) {
       console.log("Поля первого товара:", Object.keys(first).join(", "));
       console.log(JSON.stringify(first, null, 2).slice(0, 2000));
-      const mapped = toProduct(first, await listCategories(feedId));
+      const mapped = toProduct(first, feeds.find((f) => f.id === feedId)?.title);
       console.log("Как это ляжет в карточку:", JSON.stringify(mapped, null, 2).slice(0, 1200));
       console.log(usable(mapped) ? "✓ карточка пригодна для ленты" : "✗ не хватает картинки, названия или цены");
     }
@@ -406,7 +414,6 @@ async function main() {
   let feedIndex = feeds.findIndex((f) => f.id === ledger.feedId);
   if (feedIndex < 0) feedIndex = Math.min(ledger.feed ?? 0, feeds.length - 1);
   let cursor = feeds[feedIndex]?.id === ledger.feedId ? ledger.cursor : "";
-  let categories = await listCategories(feeds[feedIndex].id);
 
   while (spent.calls + 1 <= left) {
     if (known.size >= MAX_PRODUCTS) {
@@ -433,13 +440,15 @@ async function main() {
     const addedBefore = added;
     for (const raw of page.items) {
       if (dumped.length < 20 && DUMP) dumped.push(raw);
-      const product = toProduct(raw, categories);
+      const product = toProduct(raw, feed.title);
       if (!usable(product)) {
         skipped += 1;
         continue;
       }
       // Известный товар обновляем — цены на AliExpress живут своей жизнью, —
-      // но не дублируем.
+      // но не дублируем. Один и тот же товар попадается в нескольких фидах
+      // (скажем, в «Электронике» и в «Топе продаж»), и категория достаётся
+      // ему от того фида, который встретился первым.
       if (!known.has(product.id)) {
         if (known.size >= MAX_PRODUCTS) continue;
         added += 1;
@@ -454,7 +463,6 @@ async function main() {
     if (!cursor || !page.items.length) {
       feedIndex = (feedIndex + 1) % feeds.length;
       cursor = "";
-      categories = await listCategories(feeds[feedIndex].id);
       if (feeds.length === 1) {
         console.log("Единственный фид пройден до конца.");
         break;

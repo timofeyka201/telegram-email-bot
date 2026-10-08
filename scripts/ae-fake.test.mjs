@@ -6,8 +6,8 @@ import { createServer } from "node:http";
  */
 const PER_FEED = Number(process.env.FAKE_PER_FEED ?? 450);
 const FEEDS = [
-  { id: "98", title: "Горячие товары" },
-  { id: "99", title: "Электроника" },
+  { id: "104", title: "Спорт. Автомобили и мотоциклы" },
+  { id: "103", title: "Дом, сад и офис. Обустройство дома и инструменты. Бытовая техника" },
 ];
 const CATEGORIES = { 200000297: "Телефоны и аксессуары", 200000343: "Дом и сад" };
 
@@ -16,21 +16,34 @@ let mode = "ok";
 const seen = new Set();
 let calls = 0;
 
+/**
+ * Товар в том виде, в каком его отдаёт настоящий фид: JSON:API с attributes,
+ * цена объектом в копейках, картинки галереей, категории нет вовсе.
+ */
 const product = (feed, i) => ({
-  productId: `${feed}00${i}`,
-  title: `Товар ${feed}-${i} из фида`,
-  productUrl: `https://aliexpress.ru/item/${feed}00${i}.html`,
-  // Фид отдаёт адреса без схемы — импортёр обязан это пережить.
-  images: [`//ae01.alicdn.com/kf/${feed}-${i}-1.jpg`, `//ae01.alicdn.com/kf/${feed}-${i}-2.jpg`],
-  salePriceCents: 123400 + i * 100,
-  originalPriceCents: 199900 + i * 100,
-  categoryId: i % 2 ? 200000297 : 200000343,
-  commissionRateCents: 500,
-  rating: 4.7,
-  purchasesAmount: 1200 + i,
-  store: { name: `Магазин ${feed}` },
-  localityType: i % 3 === 0 ? "onlyLocal" : "onlyCrossBorder",
-  currency: "RUB",
+  type: "product",
+  id: `0_1005${feed}3678${String(i).padStart(5, "0")}`,
+  attributes: {
+    commissionRate: 86500,
+    imageGallery: [
+      `https://ae-pic-a1.aliexpress-media.com/kf/S${feed}-${i}-1.jpg_480x480.jpg`,
+      `https://ae-pic-a1.aliexpress-media.com/kf/S${feed}-${i}-2.jpg_480x480.jpg`,
+    ],
+    imageURL: `https://ae-pic-a1.aliexpress-media.com/kf/S${feed}-${i}-1.jpg_480x480.jpg`,
+    isAffiliate: true,
+    isLocal: i % 3 === 0,
+    itemId: Number(`1005${feed}3678${String(i).padStart(5, "0")}`),
+    pageURL: `https://aliexpress.ru/item/1005${feed}3678${String(i).padStart(5, "0")}.html?sku_id=12000015830602450`,
+    price: { cents: 11000 + i * 100, currency: "RUB" },
+    productFeedId: Number(feed),
+    publisherCommissionRaw: "Комиссия до 8.65%",
+    purchasesAmount: 124009 - i,
+    rating: 4.8,
+    sellerId: 243689844,
+    sourceId: 0,
+    store: { title: `Магазин ${feed}`, url: "https://aliexpress.ru/store/900246057" },
+    title: `Вибро блесна SANMO ${feed}-${i}`,
+  },
 });
 
 const json = (res, code, body) => {
@@ -123,7 +136,8 @@ createServer(async (req, res) => {
       });
     }
     const cursor = url.searchParams.get("fromLastId") ?? "";
-    const from = cursor ? Number(cursor.split("_")[1]) : 0;
+    // Курсор площадки — «0_<itemId>»; у нас последние пять цифр это номер.
+    const from = cursor ? Number(cursor.split("_")[1].slice(-5)) : 0;
     const items = [];
     for (let i = from; i < Math.min(from + limit, PER_FEED); i++) {
       items.push(product(feed, i));
@@ -132,7 +146,10 @@ createServer(async (req, res) => {
     const nextIndex = from + items.length;
     return json(res, 200, {
       data: items,
-      meta: { total: String(PER_FEED), nextFromLastId: nextIndex >= PER_FEED ? "" : `0_${nextIndex}` },
+      meta: {
+        total: String(PER_FEED),
+        nextFromLastId: nextIndex >= PER_FEED ? "" : `0_1005${feed}3678${String(nextIndex).padStart(5, "0")}`,
+      },
     });
   }
 
