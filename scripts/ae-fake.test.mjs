@@ -89,7 +89,16 @@ createServer(async (req, res) => {
   if (mode === "429") return json(res, 429, { code: 429001, message: "NeedCaptcha" });
 
   if (p === "/api/v1/productsfeeds/feeds") {
-    return json(res, 200, { data: FEEDS.map((f) => ({ id: f.id, title: f.title })), meta: { total: String(FEEDS.length) } });
+    // У настоящей площадки предел размера страницы здесь 30, а не 100.
+    const limit = Number(url.searchParams.get("limit") ?? 0);
+    if (limit > 30) {
+      return json(res, 422, {
+        errors: [{ code: 422001, field: "limit", meta: { message: "Limit должен быть меньше или равно 30" } }],
+      });
+    }
+    const page = Math.max(1, Number(url.searchParams.get("page") ?? 1));
+    const slice = FEEDS.slice((page - 1) * limit, page * limit);
+    return json(res, 200, { data: slice, meta: { total: String(FEEDS.length) } });
   }
 
   if (p === "/api/v1/productsfeeds/categories") {
@@ -101,6 +110,12 @@ createServer(async (req, res) => {
   if (p === "/api/v1/productsfeeds/products") {
     const feed = url.searchParams.get("productFeedId");
     const limit = Number(url.searchParams.get("limit") ?? 100);
+    const cap = Number(process.env.FAKE_PRODUCTS_LIMIT ?? 100);
+    if (limit > cap) {
+      return json(res, 422, {
+        errors: [{ code: 422001, field: "limit", meta: { message: `Limit должен быть меньше или равно ${cap}` } }],
+      });
+    }
     const cursor = url.searchParams.get("fromLastId") ?? "";
     const from = cursor ? Number(cursor.split("_")[1]) : 0;
     const items = [];

@@ -191,14 +191,26 @@ function writeSnapshot(file) {
 // ----------------------------------------------------------------- API
 const feedsOf = (data) => data?.data ?? data?.feeds ?? [];
 
+/** Предел на размер страницы у этого метода — 30, в отличие от товаров фида. */
+const FEEDS_PAGE = 30;
+
 async function listFeeds() {
-  const data = await call("/api/v1/productsfeeds/feeds", { query: { limit: 100 } });
-  return feedsOf(data)
-    .map((f) => ({
-      id: String(pick(f, "id", "feedId", "productFeedId", "attributes.id") ?? ""),
-      title: String(pick(f, "title", "name", "attributes.title") ?? "без названия"),
-    }))
-    .filter((f) => f.id);
+  const out = new Map();
+  for (let page = 1; page <= 20; page++) {
+    const data = await call("/api/v1/productsfeeds/feeds", { query: { limit: FEEDS_PAGE, page } });
+    const rows = feedsOf(data)
+      .map((f) => ({
+        id: String(pick(f, "id", "feedId", "productFeedId", "attributes.id") ?? ""),
+        title: String(pick(f, "title", "name", "attributes.title") ?? "без названия"),
+      }))
+      .filter((f) => f.id);
+    for (const row of rows) out.set(row.id, row);
+
+    const total = num(pick(data ?? {}, "meta.total", "total"));
+    // Хватит, когда страница пришла неполной или собрали всё, что обещано.
+    if (rows.length < FEEDS_PAGE || (total !== undefined && out.size >= total)) break;
+  }
+  return [...out.values()];
 }
 
 /**
@@ -210,7 +222,10 @@ async function listPlacements(userId) {
   const data = await call(`/api/v1/users/${userId}/placements/active`);
   return (data?.placements ?? data?.data ?? []).map((p) => ({
     id: String(pick(p, "id", "placementId", "attributes.id") ?? ""),
-    title: String(pick(p, "title", "name", "url", "attributes.title") ?? "без названия"),
+    title: String(
+      pick(p, "title", "name", "url", "siteUrl", "domain", "link", "attributes.title", "attributes.url") ??
+        "без названия",
+    ),
   }));
 }
 
@@ -230,16 +245,36 @@ async function listCategories(feedId) {
   return out;
 }
 
+/**
+ * Предел размера страницы площадка может поменять, и узнаём мы об этом из
+ * отказа 422 с подсказкой в теле. Запоминаем и дальше просим столько, сколько
+ * разрешено: ронять многочасовой импорт из-за одного числа незачем.
+ */
+let pageSize = PAGE;
+
+function smallerLimit(error) {
+  const max = /меньше или равно\s*(\d+)/i.exec(error.body ?? "")?.[1];
+  return max ? Number(max) : null;
+}
+
 async function productsPage(feedId, cursor) {
-  const data = await call("/api/v1/productsfeeds/products", {
-    query: {
-      productFeedId: feedId,
-      limit: PAGE,
-      localityType: LOCALITY,
-      // Пустое значение курсора означает «с начала» — так написано в документации.
-      fromLastId: cursor ?? "",
-    },
-  });
+  const query = {
+    productFeedId: feedId,
+    limit: pageSize,
+    localityType: LOCALITY,
+    // Пустое значение курсора означает «с начала» — так написано в документации.
+    fromLastId: cursor ?? "",
+  };
+  let data;
+  try {
+    data = await call("/api/v1/productsfeeds/products", { query });
+  } catch (e) {
+    const max = e instanceof AeError && e.status === 422 ? smallerLimit(e) : null;
+    if (!max) throw e;
+    console.log(`Площадка разрешает не больше ${max} товаров за запрос — дальше просим столько.`);
+    pageSize = max;
+    data = await call("/api/v1/productsfeeds/products", { query: { ...query, limit: pageSize } });
+  }
   return {
     items: data?.data ?? data?.products ?? [],
     next: String(pick(data ?? {}, "meta.nextFromLastId", "nextFromLastId") ?? ""),
