@@ -196,13 +196,31 @@ const usable = (p) => p && p.images.length > 0 && p.title && p.price !== undefin
 
 // ------------------------------------------------------------- снапшот
 function readSnapshot() {
+  const empty = { version: 1, kind: "ae", products: [] };
   try {
     const f = JSON.parse(readFileSync(OUT, "utf8"));
-    if (Array.isArray(f.products)) return f;
+    if (!Array.isArray(f.products)) return empty;
+
+    // На этом месте мог лежать каталог другого источника — скажем, Etsy.
+    // Дописывать в него товары AliExpress нельзя: витрина получится смесью,
+    // в которой половина карточек ведёт в чужой магазин и не приносит
+    // комиссии. Начинаем заново, а чужие карточки отбрасываем.
+    const foreign = f.products.filter((p) => p.source !== "ae").length;
+    if (foreign) {
+      console.log(`В снапшоте ${foreign} карточек не из AliExpress (каталог «${f.kind ?? "без имени"}») — начинаем заново.`);
+      console.log(`  Прежний файл сохраняю рядом: ${OUT}.bak`);
+      try {
+        writeFileSync(`${OUT}.bak`, JSON.stringify(f));
+      } catch (e) {
+        console.error("  Копию сделать не удалось:", e.message);
+      }
+      return empty;
+    }
+    return f;
   } catch {
     // снапшота ещё нет
   }
-  return { version: 1, kind: "ae", products: [] };
+  return empty;
 }
 
 function writeSnapshot(file) {
