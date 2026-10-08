@@ -69,10 +69,12 @@ sudo -u swiper nano /home/swiper/.env.production
 #   AE_POSTBACK_SECRET=…
 
 # 2. проверка связи: токен, список фидов, первая страница товаров
-su - swiper -c 'cd ~/app && node scripts/build-catalog-ae.mjs --check'
+#    ENV_FILE нужен потому, что настройки лежат отдельно от кода и сами
+#    в окружение команды не попадают
+su - swiper -c 'cd ~/app && ENV_FILE=/home/swiper/.env.production node scripts/build-catalog-ae.mjs --check'
 
 # 3. первый импорт (бюджет расходуется постепенно, за несколько ночей)
-su - swiper -c 'cd ~/app && node scripts/build-catalog-ae.mjs --file /var/lib/swiper/catalog.json'
+su - swiper -c 'cd ~/app && ENV_FILE=/home/swiper/.env.production node scripts/build-catalog-ae.mjs --file /var/lib/swiper/catalog.json'
 
 # 4. картинки к себе
 su - swiper -c 'cd ~/app && node scripts/cache-images.mjs --file /var/lib/swiper/catalog.json'

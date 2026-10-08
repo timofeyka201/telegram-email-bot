@@ -10,10 +10,16 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-/** Ключи читаем и из .env.local — чтобы не светить их в истории команд. */
+/**
+ * Ключи читаем из файла, а не из командной строки: иначе они остаются в
+ * истории команд и в списке процессов. На сервере настройки лежат отдельно от
+ * кода, поэтому путь можно задать через ENV_FILE:
+ *
+ *   ENV_FILE=/home/swiper/.env.production node scripts/build-catalog-ae.mjs
+ */
 function readEnvFile() {
   const out = {};
-  for (const file of [".env.local", ".env"]) {
+  for (const file of [process.env.ENV_FILE, ".env.local", ".env"].filter(Boolean)) {
     if (!existsSync(file)) continue;
     for (const line of readFileSync(file, "utf8").split("\n")) {
       const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
