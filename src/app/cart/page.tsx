@@ -8,6 +8,7 @@ import ProductSheet from "@/components/ProductSheet";
 import { IconCart, IconExternal, IconTrash } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { cartTotals, unitPrice, useHydrated, useStore } from "@/lib/store";
+import { shopUrl, shopUrlAbsolute } from "@/lib/shop";
 import { formatNative, formatRate, formatRub, needsConversion, plural, rateFor, symbolOf, toRub } from "@/lib/money";
 import type { Product } from "@/lib/types";
 
@@ -36,7 +37,7 @@ export default function CartPage() {
 
   async function copyList() {
     const text = cart
-      .map((c) => `${c.qty} × ${c.product.title}\n${formatNative(unitPrice(c), c.product.currency)} / шт · ${c.product.url}`)
+      .map((c) => `${c.qty} × ${c.product.title}\n${formatNative(unitPrice(c), c.product.currency)} / шт · ${shopUrlAbsolute(c.product)}`)
       .join("\n\n");
     const tail = currencies.map((c) => formatNative(totals[c], c)).join(" + ");
     try {
@@ -153,7 +154,7 @@ export default function CartPage() {
                   Скопировать заказ
                 </button>
                 <a
-                  href={cart[0]?.product.url}
+                  href={cart[0] ? shopUrl(cart[0].product) : undefined}
                   target="_blank"
                   rel="noreferrer noopener"
                   className="flex items-center justify-center gap-1.5 rounded-2xl bg-[var(--color-surface-2)] px-4 py-3 text-[14px] font-semibold"

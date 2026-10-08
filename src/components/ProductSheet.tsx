@@ -16,6 +16,7 @@ import {
 import { categoryLabel } from "@/lib/categories";
 import SizeGuide from "./SizeGuide";
 import SizeProfileSheet from "./SizeProfileSheet";
+import { shopUrl } from "@/lib/shop";
 import { toast } from "./Toast";
 import { useStore } from "@/lib/store";
 import { pushWish } from "@/lib/wish/client";
@@ -54,7 +55,10 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
   // Выдача поиска приходит без описания и характеристик — дотягиваем по ссылке.
   useEffect(() => {
     const thin = !product.description || product.attributes.length === 0;
-    if (!thin || product.source === "demo" || product.source === "catalog") return;
+    // Источники, у которых карточка приезжает из снапшота целиком: дотягивать
+    // по сети нечего, а запрос всё равно упёрся бы в чужой API.
+    const offline = product.source === "demo" || product.source === "catalog" || product.source === "ae";
+    if (!thin || offline) return;
     let alive = true;
     setEnriching(true);
     fetch(`/api/item?url=${encodeURIComponent(product.url)}`)
@@ -281,7 +285,7 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
           </div>
 
           <a
-            href={full.url}
+            href={shopUrl(full)}
             target="_blank"
             rel="noreferrer noopener"
             className="mt-2 flex items-center justify-between px-4 py-4 text-[14px] font-semibold"

@@ -15,6 +15,7 @@
     "catalog:ali": "node scripts/build-catalog-aliexpress.mjs",
     "icons": "node scripts/make-icons.mjs",
     "catalog:etsy": "node scripts/build-catalog-etsy.mjs",
+    "catalog:ae": "node scripts/build-catalog-ae.mjs",
     "catalog:shrink": "node scripts/shrink-images.mjs",
     "catalog:images": "node scripts/cache-images.mjs"
   },

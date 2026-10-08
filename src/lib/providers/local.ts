@@ -113,9 +113,15 @@ function score(p: Product, hint: TasteHint | undefined, rnd: () => number): numb
   return value;
 }
 
+/** Название источника по снапшоту: витрина на AliExpress не должна называться
+ *  «своей базой» — человек видит этот ярлык в настройках. */
+const SNAPSHOT_LABEL: Record<string, string> = { ae: "AliExpress", etsy: "Etsy", global: "Открытый каталог" };
+
 export const localProvider: Provider = {
   id: "local",
-  label: "Своя база",
+  get label() {
+    return SNAPSHOT_LABEL[catalogInfo().kind] ?? "Своя база";
+  },
   get note() {
     return `${catalogProducts().length} карточек в снапшоте. Работает всегда, без внешних API.`;
   },
