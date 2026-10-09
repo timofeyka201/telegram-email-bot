@@ -9,7 +9,14 @@ const FEEDS = [
   { id: "104", title: "Спорт. Автомобили и мотоциклы" },
   { id: "103", title: "Дом, сад и офис. Обустройство дома и инструменты. Бытовая техника" },
 ];
-const CATEGORIES = { 200000297: "Телефоны и аксессуары", 200000343: "Дом и сад" };
+/** Категории внутри фида — как у настоящей площадки: «Спорт» делится дальше. */
+const CATEGORIES = {
+  104: [
+    { id: "200000297", title: "Рыбалка" },
+    { id: "200000343", title: "Автотовары" },
+  ],
+  103: [{ id: "200000531", title: "Инструменты" }],
+};
 
 let issued = null; // действующим считается только последний выданный токен
 let mode = "ok";
@@ -121,9 +128,8 @@ createServer(async (req, res) => {
   }
 
   if (p === "/api/v1/productsfeeds/categories") {
-    return json(res, 200, {
-      data: Object.entries(CATEGORIES).map(([id, title]) => ({ id, title })),
-    });
+    const feed = url.searchParams.get("productFeedId");
+    return json(res, 200, { data: CATEGORIES[feed] ?? [] });
   }
 
   if (p === "/api/v1/productsfeeds/products") {
@@ -138,8 +144,14 @@ createServer(async (req, res) => {
     const cursor = url.searchParams.get("fromLastId") ?? "";
     // Курсор площадки — «0_<itemId>»; у нас последние пять цифр это номер.
     const from = cursor ? Number(cursor.split("_")[1].slice(-5)) : 0;
+    const category = url.searchParams.get("categoryId");
+    const list = CATEGORIES[feed] ?? [];
+    const slot = Math.max(0, list.findIndex((c) => c.id === category));
     const items = [];
     for (let i = from; i < Math.min(from + limit, PER_FEED); i++) {
+      // Товар принадлежит ровно одной категории: иначе проверка не покажет,
+      // правильно ли импортёр их раскладывает.
+      if (list.length && i % list.length !== slot) continue;
       items.push(product(feed, i));
       seen.add(`${feed}-${i}`);
     }

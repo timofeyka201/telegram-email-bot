@@ -57,7 +57,12 @@ function readLedger() {
     // первого запуска ещё не было
   }
   // Счётчик запросов живёт сутками, место в обходе — нет.
-  const where = { feed: stored?.feed ?? 0, cursor: stored?.cursor ?? "", feedId: stored?.feedId ?? null };
+  const where = {
+    feed: stored?.feed ?? 0,
+    cursor: stored?.cursor ?? "",
+    feedId: stored?.feedId ?? null,
+    categoryId: stored?.categoryId ?? null,
+  };
   return stored?.day === today() ? { ...stored, ...where } : { day: today(), used: 0, ...where };
 }
 
@@ -306,11 +311,33 @@ function smallerLimit(error) {
   return max ? Number(max) : null;
 }
 
-async function productsPage(feedId, cursor) {
+/**
+ * Категории, товары которых есть в фиде. Один запрос на фид — и дальше можно
+ * обходить его по категориям, а не целиком: тогда у каждого товара категория
+ * своя («Рыбалка», «Автотовары»), а не общая на весь фид («Спорт»).
+ */
+async function listCategories(feedId) {
+  try {
+    const data = await call("/api/v1/productsfeeds/categories", { query: { productFeedId: feedId } });
+    const rows = data?.data ?? data?.categories ?? [];
+    return rows
+      .map((c) => ({
+        id: String(pick(c, "id", "categoryId", "attributes.id") ?? ""),
+        title: String(pick(c, "title", "name", "attributes.title", "attributes.name") ?? ""),
+      }))
+      .filter((c) => c.id && c.title);
+  } catch (e) {
+    console.error(`Категории фида ${feedId} не получены: ${e.message}`);
+    return [];
+  }
+}
+
+async function productsPage(feedId, cursor, categoryId) {
   const query = {
     productFeedId: feedId,
     limit: pageSize,
     localityType: LOCALITY,
+    categoryId,
     // Пустое значение курсора означает «с начала» — так написано в документации.
     fromLastId: cursor ?? "",
   };
@@ -428,10 +455,37 @@ async function main() {
   let dry = 0;
   const dumped = [];
 
-  // Продолжаем с того фида и места, где остановились в прошлый раз.
+  // Продолжаем с того места, где остановились в прошлый раз: фид, категория
+  // и страница внутри неё.
   let feedIndex = feeds.findIndex((f) => f.id === ledger.feedId);
   if (feedIndex < 0) feedIndex = Math.min(ledger.feed ?? 0, feeds.length - 1);
-  let cursor = feeds[feedIndex]?.id === ledger.feedId ? ledger.cursor : "";
+  const resuming = feeds[feedIndex]?.id === ledger.feedId;
+  let cursor = resuming ? (ledger.cursor ?? "") : "";
+
+  /**
+   * Категории текущего фида. Пустой список означает, что фид обходится
+   * целиком — у некоторых фидов («Топ продаж») категорий может не быть.
+   */
+  let categories = await listCategories(feeds[feedIndex].id);
+  let categoryIndex = resuming ? categories.findIndex((c) => c.id === ledger.categoryId) : -1;
+  if (categoryIndex < 0) categoryIndex = 0;
+  if (categories.length) {
+    console.log(`Фид ${feeds[feedIndex].id}: категорий ${categories.length}`);
+  }
+
+  /** Переход к следующей категории, а когда они кончились — к следующему фиду. */
+  async function advance() {
+    cursor = "";
+    if (categoryIndex + 1 < categories.length) {
+      categoryIndex += 1;
+      return true;
+    }
+    feedIndex = (feedIndex + 1) % feeds.length;
+    categoryIndex = 0;
+    categories = await listCategories(feeds[feedIndex].id);
+    if (categories.length) console.log(`Фид ${feeds[feedIndex].id}: категорий ${categories.length}`);
+    return feeds.length > 1;
+  }
 
   while (spent.calls + 1 <= left) {
     if (known.size >= MAX_PRODUCTS) {
@@ -444,9 +498,10 @@ async function main() {
     }
 
     const feed = feeds[feedIndex];
+    const category = categories[categoryIndex];
     let page;
     try {
-      page = await productsPage(feed.id, cursor);
+      page = await productsPage(feed.id, cursor, category?.id);
     } catch (e) {
       if (e instanceof AeError && e.status === 429) {
         console.log("Платформа просит притормозить — на сегодня заканчиваем.");
@@ -458,7 +513,9 @@ async function main() {
     const addedBefore = added;
     for (const raw of page.items) {
       if (dumped.length < 20 && DUMP) dumped.push(raw);
-      const product = toProduct(raw, feed.title);
+      // Категория берётся из обхода: в самом товаре её нет. Без категорий у
+      // фида остаётся его собственное название.
+      const product = toProduct(raw, category?.title ?? feed.title);
       if (!usable(product)) {
         skipped += 1;
         continue;
@@ -466,7 +523,7 @@ async function main() {
       // Известный товар обновляем — цены на AliExpress живут своей жизнью, —
       // но не дублируем. Один и тот же товар попадается в нескольких фидах
       // (скажем, в «Электронике» и в «Топе продаж»), и категория достаётся
-      // ему от того фида, который встретился первым.
+      // ему от того обхода, который встретился первым.
       if (!known.has(product.id)) {
         if (known.size >= MAX_PRODUCTS) continue;
         added += 1;
@@ -474,15 +531,16 @@ async function main() {
       known.set(product.id, product);
     }
     dry = added > addedBefore ? 0 : dry + 1;
-    console.log(`  фид ${feed.id}: получено ${page.items.length}, в каталоге ${known.size}`);
+    console.log(
+      `  фид ${feed.id}${category ? ` / ${category.title}` : ""}: получено ${page.items.length}, в каталоге ${known.size}`,
+    );
 
     cursor = page.next;
-    // Фид кончился: курсор пуст или перестал двигаться — переходим к следующему.
+    // Категория кончилась: курсор пуст или страница пришла пустой.
     if (!cursor || !page.items.length) {
-      feedIndex = (feedIndex + 1) % feeds.length;
-      cursor = "";
-      if (feeds.length === 1) {
-        console.log("Единственный фид пройден до конца.");
+      const more = await advance();
+      if (!more) {
+        console.log("Все фиды и категории пройдены до конца.");
         break;
       }
     }
@@ -502,6 +560,7 @@ async function main() {
     used: ledger.used + spent.calls,
     feed: feedIndex,
     feedId: feeds[feedIndex]?.id ?? null,
+    categoryId: categories[categoryIndex]?.id ?? null,
     cursor,
   });
 

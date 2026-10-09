@@ -256,15 +256,21 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
           {/* Вкладки заменены складными разделами: на узком экране три ярлыка в
               ряд не помещались, а описание — единственное, что читают всегда. */}
           <div className="mt-1 px-4">
+            {/* Раздела, в котором нечего показать, быть не должно: у витрины
+                AliExpress фид не отдаёт ни описаний, ни характеристик, и три
+                пустых заголовка подряд выглядят поломкой, а не карточкой. */}
+            {(full.description || enriching) && (
             <Section title="Описание" defaultOpen>
               {enriching ? (
                 <div className="skeleton h-20 w-full rounded-xl" />
               ) : (
                 <p className="whitespace-pre-line text-[15px] leading-[1.45] text-[var(--color-ink-soft)]">
-                  {full.description || "Продавец не добавил текстовое описание."}
+                  {full.description}
                 </p>
               )}
             </Section>
+            )}
+            {full.attributes.length > 0 && (
             <Section title="Характеристики" count={full.attributes.length}>
               {full.attributes.length === 0 ? (
                 <p className="text-[14px] text-[var(--color-muted)]">Характеристики не указаны.</p>
@@ -279,9 +285,12 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
                 </div>
               )}
             </Section>
-            <Section title="Отзывы" count={full.reviews.length || full.reviewsCount}>
-              <Reviews product={full} />
-            </Section>
+            )}
+            {(full.reviews.length > 0 || !!full.reviewsCount) && (
+              <Section title="Отзывы" count={full.reviews.length || full.reviewsCount}>
+                <Reviews product={full} />
+              </Section>
+            )}
           </div>
 
           <a
