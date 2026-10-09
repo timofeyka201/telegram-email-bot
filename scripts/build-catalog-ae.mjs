@@ -44,6 +44,26 @@ const DELAY = Number(args.delay ?? 250);
 /** Только российские продавцы, только зарубежные или все подряд. */
 const LOCALITY = String(args.locality || env.AE_LOCALITY || "all");
 
+/**
+ * Какие фиды брать. Без флага — все, что отдала площадка; с флагом
+ * «--feed 104,99» — только перечисленные и в этом же порядке: так каталог
+ * начинают наполнять те разделы, которые нужны в первую очередь.
+ */
+function chosenFeeds(all) {
+  if (!args.feed || args.feed === true) return all;
+  const wanted = String(args.feed)
+    .split(/[,\s]+/)
+    .map((v) => v.trim())
+    .filter(Boolean);
+  const byId = new Map(all.map((f) => [f.id, f]));
+  const picked = wanted.map((id) => byId.get(id) ?? { id, title: "указан флагом" });
+  const missing = wanted.filter((id) => !byId.has(id));
+  if (missing.length && all.length) {
+    console.log(`Среди доступных фидов нет: ${missing.join(", ")} — беру их по номеру, как указано.`);
+  }
+  return picked;
+}
+
 // --------------------------------------------------------------- журнал
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -404,9 +424,12 @@ async function main() {
 
     // Если номер фида известен, список не спрашиваем вовсе: он может быть
     // недоступен, а проверить сам фид это не мешает.
-    const feeds = args.feed ? [{ id: String(args.feed), title: "указан флагом" }] : await listFeeds();
-    console.log(`Фидов доступно: ${feeds.length}`);
-    for (const f of feeds.slice(0, 10)) console.log(`  ${f.id} — ${f.title}`);
+    const all = args.feed && args.feed !== true ? [] : await listFeeds();
+    const feeds = chosenFeeds(all);
+    console.log(`Фидов доступно: ${all.length || feeds.length}`);
+    // Печатаем все до одного: список короткий, а пропущенный фид — это
+    // пропущенный раздел витрины.
+    for (const f of feeds) console.log(`  ${f.id} — ${f.title}`);
     if (!feeds.length) {
       // Пустой список и неузнанный формат ответа выглядят одинаково, поэтому
       // показываем, что именно прислала площадка.
@@ -440,7 +463,7 @@ async function main() {
     return;
   }
 
-  const feeds = args.feed ? [{ id: String(args.feed), title: "указан флагом" }] : await listFeeds();
+  const feeds = chosenFeeds(args.feed && args.feed !== true ? [] : await listFeeds());
   if (!feeds.length) {
     console.error("Нет ни одного фида — проверьте права клиента на продуктовые фиды.");
     process.exitCode = 1;

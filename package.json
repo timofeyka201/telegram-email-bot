@@ -17,7 +17,8 @@
     "catalog:etsy": "node scripts/build-catalog-etsy.mjs",
     "catalog:ae": "node scripts/build-catalog-ae.mjs",
     "catalog:shrink": "node scripts/shrink-images.mjs",
-    "catalog:images": "node scripts/cache-images.mjs"
+    "catalog:images": "node scripts/cache-images.mjs",
+    "catalog:prune": "node scripts/prune-images.mjs"
   },
   "dependencies": {
     "framer-motion": "^11.11.17",
