@@ -15,8 +15,6 @@ import { compact, formatNative, formatRub, needsConversion, plural } from "@/lib
 const SWIPE_DISTANCE = 110;
 const SWIPE_VELOCITY = 520;
 const SUPER_DISTANCE = 130;
-/** Палец никогда не стоит на месте: сдвиг меньше этого считаем тапом, а не протяжкой. */
-const TAP_SLOP = 12;
 /** Долгое удержание — не тап: человек передумал или просто держит карточку. */
 const TAP_TIME = 600;
 
@@ -75,6 +73,8 @@ export default function SwipeCard({ product, rates, depth, showHint, onDecide, o
   const photoRef = useRef<HTMLDivElement>(null);
   /** Откуда и когда начался жест. null — значит начало до нас не дошло. */
   const press = useRef<{ x: number; y: number; at: number } | null>(null);
+  /** Жест оказался протяжкой: открывать товар по его окончании не нужно. */
+  const dragged = useRef(false);
 
   function handleDragEnd(_: unknown, info: PanInfo) {
     const { offset, velocity } = info;
@@ -102,18 +102,24 @@ export default function SwipeCard({ product, rates, depth, showHint, onDecide, o
   }, [interactive, imgIndex, images]);
 
   /**
-   * Тап распознаём сами, а не через onTap у Framer Motion: тот приходит с
-   * обработчика на окне, где currentTarget уже пуст — размеры карточки из него
-   * не достать, и любой тап превращался в «открыть карточку». Заодно здесь
-   * видно, было движение или нет, поэтому протяжка больше не открывает товар.
+   * Тап по карточке.
+   *
+   * Раньше он ловился на onPointerUp самой карточки — и на телефоне не
+   * срабатывал вовсе: как только палец касается элемента, который Framer
+   * Motion готовит к протяжке, браузер присылает pointercancel, а pointerup
+   * до нас уже не доходит. С мышью это было незаметно, с пальцем карточка не
+   * открывалась никогда.
+   *
+   * Поэтому слушаем onTap у Framer, а зону (левый край, правый, середина)
+   * считаем по точке, где палец опустился: размеры берём из своих ссылок на
+   * узлы, а не из события — у его currentTarget их нет. Протяжку отличаем по
+   * отдельному признаку, который ставит onDragStart.
    */
-  function handlePointerUp(event: React.PointerEvent<HTMLDivElement>) {
+  function handleTap() {
     const start = press.current;
     press.current = null;
-    if (!interactive || !start) return;
-
-    const moved = Math.hypot(event.clientX - start.x, event.clientY - start.y);
-    if (moved > TAP_SLOP || Date.now() - start.at > TAP_TIME) return;
+    if (!interactive || !start || dragged.current) return;
+    if (Date.now() - start.at > TAP_TIME) return;
 
     const rect = photoRef.current?.getBoundingClientRect();
     // Тап ниже фотографии — это тап по описанию: там листать нечего.
@@ -167,12 +173,16 @@ export default function SwipeCard({ product, rates, depth, showHint, onDecide, o
       drag={interactive}
       dragElastic={0.7}
       dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+      onDragStart={() => {
+        dragged.current = true;
+      }}
       onDragEnd={handleDragEnd}
       onPointerDown={(e) => {
         press.current = { x: e.clientX, y: e.clientY, at: Date.now() };
+        dragged.current = false;
       }}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={() => {
+      onTap={handleTap}
+      onTapCancel={() => {
         press.current = null;
       }}
     >
