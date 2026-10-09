@@ -43,8 +43,9 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
   const unlike = useStore((s) => s.unlike);
   const like = useStore((s) => s.like);
 
-  const [full, setFull] = useState<Product>(product);
-  const [enriching, setEnriching] = useState(false);
+  // Карточка приезжает из снапшота целиком: дотягивать по сети нечего, и
+  // менять её после открытия некому.
+  const full = product;
   const [tab, setTab] = useState<Tab>("desc");
   const [sizesOpen, setSizesOpen] = useState(false);
 
@@ -52,40 +53,6 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
   const wished = wishlist.some((p) => p.id === full.id);
   const isLiked = liked.some((p) => p.id === full.id);
 
-  // Выдача поиска приходит без описания и характеристик — дотягиваем по ссылке.
-  useEffect(() => {
-    const thin = !product.description || product.attributes.length === 0;
-    // Источники, у которых карточка приезжает из снапшота целиком: дотягивать
-    // по сети нечего, а запрос всё равно упёрся бы в чужой API.
-    const offline = product.source === "demo" || product.source === "catalog" || product.source === "ae";
-    if (!thin || offline) return;
-    let alive = true;
-    setEnriching(true);
-    fetch(`/api/item?url=${encodeURIComponent(product.url)}`)
-      .then((r) => r.json())
-      .then((d: { product?: Product; patch?: { description?: string; attributes?: Attribute[] } }) => {
-        if (!alive) return;
-        if (d.product) setFull({ ...d.product, id: product.id });
-        else if (d.patch) {
-          setFull((prev) => {
-            // Характеристики из выдачи и из карточки дополняют друг друга,
-            // повторы по названию отбрасываем.
-            const known = new Set(prev.attributes.map((a) => a.name.toLowerCase()));
-            const extra = (d.patch!.attributes ?? []).filter((a) => !known.has(a.name.toLowerCase()));
-            return {
-              ...prev,
-              description: prev.description || d.patch!.description,
-              attributes: [...prev.attributes, ...extra],
-            };
-          });
-        }
-      })
-      .catch(() => undefined)
-      .finally(() => alive && setEnriching(false));
-    return () => {
-      alive = false;
-    };
-  }, [product]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -106,10 +73,8 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
   const chips = [
     full.category ? categoryLabel(full.category) : null,
     ...full.attributes.slice(0, 3).map((a) => a.value),
-    // Минимальная партия есть только на опте (1688). Розничные источники
-    // кладут в это поле что попало — и из-за него в корзину когда-то
-    // попадало по сорок восемь штук туши для ресниц.
-    full.source === "bhapi" && full.minOrder && full.minOrder > 1 ? `от ${full.minOrder} шт.` : null,
+    // Минимальная партия была осмысленна на оптовом 1688; розничная витрина
+    // AliExpress продаёт поштучно, и показывать тут нечего.
   ].filter((c): c is string => !!c && c.length <= 28);
 
   const sellerLine = [
@@ -259,16 +224,12 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
             {/* Раздела, в котором нечего показать, быть не должно: у витрины
                 AliExpress фид не отдаёт ни описаний, ни характеристик, и три
                 пустых заголовка подряд выглядят поломкой, а не карточкой. */}
-            {(full.description || enriching) && (
-            <Section title="Описание" defaultOpen>
-              {enriching ? (
-                <div className="skeleton h-20 w-full rounded-xl" />
-              ) : (
+            {full.description && (
+              <Section title="Описание" defaultOpen>
                 <p className="whitespace-pre-line text-[15px] leading-[1.45] text-[var(--color-ink-soft)]">
                   {full.description}
                 </p>
-              )}
-            </Section>
+              </Section>
             )}
             {full.attributes.length > 0 && (
             <Section title="Характеристики" count={full.attributes.length}>
