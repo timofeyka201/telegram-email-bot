@@ -322,10 +322,23 @@ export const useStore = create<State>()(
         return product;
       },
 
+      /**
+       * Отмена последнего решения.
+       *
+       * Колода подрезается по мере просмотра — позади остаётся десяток
+       * карточек, а история решений хранит тридцать. Раньше отмена просто
+       * отступала на шаг назад по колоде и за её краем переставала работать:
+       * кнопка нажималась, карточка дёргалась, прежняя не возвращалась.
+       * Теперь карточку берём из истории и, если в колоде её уже нет,
+       * ставим обратно сами — что обещано кнопкой, то и происходит.
+       */
       undo: () =>
         set((s) => {
           const [last, ...rest] = s.history;
-          if (!last || s.index === 0) return s;
+          if (!last) return s;
+          const inDeck = s.index > 0 && s.deck[s.index - 1]?.id === last.product.id;
+          const deck = inDeck ? s.deck : [last.product, ...s.deck.slice(s.index)];
+          const index = inDeck ? s.index - 1 : 0;
           const stats = { ...s.stats };
           stats.swipes = Math.max(0, stats.swipes - 1);
           stats.daySwipes = Math.max(0, stats.daySwipes - 1);
@@ -334,7 +347,8 @@ export const useStore = create<State>()(
             stats.streak = Math.max(0, stats.streak - 1);
           }
           return {
-            index: s.index - 1,
+            deck,
+            index,
             history: rest,
             liked: last.decision === "dislike" ? s.liked : s.liked.filter((p) => p.id !== last.product.id),
             cart: last.decision === "super" ? s.cart.filter((c) => c.product.id !== last.product.id) : s.cart,

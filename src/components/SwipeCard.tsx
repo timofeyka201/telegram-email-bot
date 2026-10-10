@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion";
+import { motion, useDragControls, useMotionValue, useTransform, type PanInfo } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import Img, { prefetchImage } from "./Img";
 import { IconCart, IconChevron, IconFlame, IconHeart, IconStar, IconUndo, IconX } from "./Icons";
@@ -136,6 +136,21 @@ export default function SwipeCard({ product, rates, depth, showHint, onDecide, o
   const images = product.images.length ? product.images : [""];
   const interactive = depth === 0;
 
+  /**
+   * Протяжку запускаем вручную.
+   *
+   * Framer вешает свой обработчик нажатия на сам узел, обычным DOM-слушателем.
+   * React же собирает события в корне документа, поэтому stopPropagation у
+   * кнопки листания фото до этого слушателя не доходит: нажав на стрелку и
+   * потянув, человек тащил карточку — а кнопка в это время перехватывала
+   * указатель, и жест заканчивался ничем. Карточка оставалась сдвинутой.
+   *
+   * С dragListener={false} протяжка начинается только там, где мы её начнём
+   * сами, — в обработчике самой карточки. До него нажатие на кнопку не
+   * доходит, и теперь это действительно так.
+   */
+  const drag = useDragControls();
+
   const cardRef = useRef<HTMLDivElement>(null);
   /** Фотография занимает не всю карточку: под ней непрозрачный блок с ценой. */
   const photoRef = useRef<HTMLDivElement>(null);
@@ -239,6 +254,8 @@ export default function SwipeCard({ product, rates, depth, showHint, onDecide, o
       exit="exit"
       transition={{ type: "spring", stiffness: 320, damping: 34 }}
       drag={interactive}
+      dragListener={false}
+      dragControls={drag}
       dragElastic={0.7}
       dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
       onDragStart={() => {
@@ -248,6 +265,7 @@ export default function SwipeCard({ product, rates, depth, showHint, onDecide, o
       onPointerDown={(e) => {
         press.current = { x: e.clientX, y: e.clientY, at: Date.now() };
         dragged.current = false;
+        if (interactive) drag.start(e);
       }}
       onTap={handleTap}
       onTapCancel={() => {
