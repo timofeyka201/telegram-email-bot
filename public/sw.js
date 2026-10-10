@@ -7,7 +7,9 @@
  * кэширование по факту обращения.
  */
 
-const VERSION = "v1";
+// v2 — перестановка интерфейса: старая оболочка в кэше показывала бы
+// прежнюю ленту с нижним рядом кнопок до ручного обновления страницы.
+const VERSION = "v2";
 const SHELL = `swiper-shell-${VERSION}`;
 const DATA = `swiper-data-${VERSION}`;
 const IMAGES = `swiper-images-${VERSION}`;
@@ -28,7 +30,7 @@ const FOREIGN_IMAGE_LIMIT = 60;
  * и закэшировать не может — а с домашнего экрана приложение могут открыть
  * сразу в метро.
  */
-const PRECACHE = [OFFLINE_URL, "/", "/likes", "/wishlist", "/cart", "/icons/icon-192.png"];
+const PRECACHE = [OFFLINE_URL, "/", "/likes", "/wishlist", "/cart", "/profile", "/icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

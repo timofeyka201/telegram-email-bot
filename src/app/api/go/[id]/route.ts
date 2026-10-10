@@ -21,12 +21,23 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // Идентификаторы с суффиксом круга («-r1») указывают на тот же товар.
   const base = id.replace(/-r\d+$/, "");
   const product = catalogProducts().find((p) => p.id === base);
-  if (!product?.url) return new NextResponse("Нет такого товара", { status: 404 });
 
-  const creative = await affiliateLink(base, product.url, product.title);
+  /*
+   * Товара может не оказаться в снапшоте: витрина пересобирается каждую ночь,
+   * и часть карточек уходит. Но ссылка на него остаётся в избранном, в корзине
+   * и в списке заказов, и вести её в тупик нельзя. Адрес AliExpress выводится
+   * из нашего же идентификатора «ae-<номер>», поэтому подставить его можно без
+   * обращения к площадке. В адрес идут только цифры — чужую ссылку через наш
+   * переход так не протащить.
+   */
+  const itemId = /^ae-(\d{6,20})$/.exec(base)?.[1];
+  const url = product?.url ?? (itemId ? `https://aliexpress.ru/item/${itemId}.html` : undefined);
+  if (!url) return new NextResponse("Нет такого товара", { status: 404 });
+
+  const creative = await affiliateLink(base, url, product?.title ?? `Товар ${itemId}`);
   await noteClick(base, creative ? "affiliate" : "direct");
 
-  return NextResponse.redirect(creative?.target ?? product.url, {
+  return NextResponse.redirect(creative?.target ?? url, {
     status: 302,
     // Переход персональный и меняется вместе с настройками партнёрки —
     // кэшировать его ни браузеру, ни прокси не нужно.

@@ -227,3 +227,27 @@ export const IconChevronDown = ({ className }: P) => (
     <path d="M6 9l6 6 6-6" />
   </svg>
 );
+
+/** Медаль: знак ранга в профиле. */
+export const IconMedal = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M8 3 6 7m10-4 2 4" />
+    <circle cx="12" cy="14.5" r="6" />
+    <path d="m12 11 1.3 2.6 2.9.4-2.1 2 .5 2.9-2.6-1.4-2.6 1.4.5-2.9-2.1-2 2.9-.4L12 11Z" fill={base} stroke="none" />
+  </svg>
+);
+
+/** Пакет: отметка о переходе в магазин в разделе «Заказы». */
+export const IconBox = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M3.5 7.5 12 3.5l8.5 4v9L12 20.5l-8.5-4v-9Z" />
+    <path d="M3.5 7.5 12 11.5l8.5-4M12 11.5v9" />
+  </svg>
+);
+
+/** Телефонная трубка: поле номера в профиле. */
+export const IconPhone = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke={base} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M7.2 3.5h2.3l1.2 3.4-1.9 1.3a10.4 10.4 0 0 0 5 5l1.3-1.9 3.4 1.2v2.3a2 2 0 0 1-2.2 2A15.5 15.5 0 0 1 5.2 5.7a2 2 0 0 1 2-2.2Z" />
+  </svg>
+);

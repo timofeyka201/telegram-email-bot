@@ -106,6 +106,14 @@ function merge(local: SyncedProfile, remote: SyncedProfile): SyncedProfile {
       reasons: weights(remote.taste?.reasons, local.taste?.reasons),
     },
     sizes: Object.keys(fresh.sizes ?? {}).length ? fresh.sizes : (stale.sizes ?? {}),
+    // Имя и телефон: поле за полем, иначе заполненное на одном устройстве
+    // затирается пустотой с другого.
+    person: {
+      firstName: fresh.person?.firstName || stale.person?.firstName || "",
+      lastName: fresh.person?.lastName || stale.person?.lastName || "",
+      phone: fresh.person?.phone || stale.person?.phone || "",
+    },
+    orders: byId(remote.orders ?? [], local.orders ?? []).slice(0, 60),
     stats: {
       ...fresh.stats,
       swipes: Math.max(local.stats?.swipes ?? 0, remote.stats?.swipes ?? 0),

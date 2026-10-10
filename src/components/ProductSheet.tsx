@@ -42,6 +42,7 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
   const addToCart = useStore((s) => s.addToCart);
   const unlike = useStore((s) => s.unlike);
   const like = useStore((s) => s.like);
+  const noteOrder = useStore((s) => s.noteOrder);
 
   // Карточка приезжает из снапшота целиком: дотягивать по сети нечего, и
   // менять её после открытия некому.
@@ -258,6 +259,9 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
             href={shopUrl(full)}
             target="_blank"
             rel="noreferrer noopener"
+            // Уход в магазин — единственное, что похоже на заказ: оформление
+            // происходит там, и без отметки найти товар потом нечем.
+            onClick={() => noteOrder(full)}
             className="mt-2 flex items-center justify-between px-4 py-4 text-[14px] font-semibold"
           >
             Открыть карточку у источника

@@ -3,7 +3,7 @@
 import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import Img, { prefetchImage } from "./Img";
-import { IconCart, IconChevron, IconFlame, IconHeart, IconStar, IconX } from "./Icons";
+import { IconCart, IconChevron, IconFlame, IconHeart, IconStar, IconUndo, IconX } from "./Icons";
 import { categoryLabel } from "@/lib/categories";
 import type { Product } from "@/lib/types";
 import type { Decision } from "@/lib/store";
@@ -12,11 +12,29 @@ import type { Decision } from "@/lib/store";
 export type ExitWay = Decision | "reset";
 import { compact, formatNative, formatRub, needsConversion, plural } from "@/lib/money";
 
-const SWIPE_DISTANCE = 110;
-const SWIPE_VELOCITY = 520;
-const SUPER_DISTANCE = 130;
+/**
+ * Порог свайпа. Был 110 пикселей при 520 скорости — на телефоне, который
+ * держат одной рукой, большой палец столько не проходит, и карточка упруго
+ * возвращалась на место вместо решения. Сейчас хватает короткого движения;
+ * «в корзину» оставлено заметно строже остальных — это единственное решение,
+ * которое кладёт товар в корзину, и случайным оно быть не должно.
+ */
+const SWIPE_DISTANCE = 72;
+const SWIPE_VELOCITY = 340;
+const SUPER_DISTANCE = 104;
 /** Долгое удержание — не тап: человек передумал или просто держит карточку. */
 const TAP_TIME = 600;
+
+/**
+ * Пропорции карточки (ширина к высоте). Нижний ряд кнопок убран, и высоты
+ * стало вдвое больше, но отдать её фотографии целиком нельзя: AliExpress
+ * отдаёт квадратные снимки, а квадрат в вытянутом окне обрезается по бокам —
+ * у платья исчезают рукава. При 0.72 на карточку приходится подпись с ценой
+ * (около 100 точек) и фотография, близкая к квадрату: обрезка остаётся в
+ * пределах десятой части кадра. Если места меньше, карточка просто ниже —
+ * ограничение максимумом, а не фиксированная высота.
+ */
+const CARD_ASPECT = 0.72;
 
 type Props = {
   product: Product;
@@ -27,6 +45,9 @@ type Props = {
   showHint?: boolean;
   onDecide: (d: Decision) => void;
   onOpen: () => void;
+  /** Вернуть предыдущую карточку. Кнопка живёт на фото верхней карточки. */
+  onUndo: () => void;
+  canUndo: boolean;
 };
 
 /**
@@ -52,13 +73,60 @@ function Stamp({
   );
 }
 
-export default function SwipeCard({ product, rates, depth, showHint, onDecide, onOpen }: Props) {
+/**
+ * Кнопка поверх фотографии. Тёмное стекло, а не цветная заливка: снимок под
+ * ней бывает любым, и единственный фон, который читается на всех, — затемнение.
+ *
+ * Жест до карточки не доходит: кнопка лежит на перетаскиваемом узле, и без
+ * stopPropagation нажатие посчиталось бы началом свайпа.
+ */
+function PhotoButton({
+  label,
+  onPress,
+  disabled,
+  accent,
+  children,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  accent?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <motion.button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      whileTap={{ scale: 0.88 }}
+      transition={{ type: "spring", stiffness: 520, damping: 24 }}
+      onPointerDown={(e) => e.stopPropagation()}
+      onPointerUp={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onPress();
+      }}
+      className={`flex h-11 w-11 items-center justify-center rounded-full backdrop-blur-sm transition-colors disabled:opacity-40 ${
+        accent
+          ? "on-accent bg-[var(--color-super)] shadow-[0_6px_18px_rgba(0,0,0,.28)]"
+          : "bg-black/40 text-white active:bg-black/60"
+      }`}
+    >
+      {children}
+    </motion.button>
+  );
+}
+
+export default function SwipeCard({ product, rates, depth, showHint, onDecide, onOpen, onUndo, canUndo }: Props) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-260, 0, 260], [-14, 0, 14]);
-  const likeOpacity = useTransform(x, [24, 130], [0, 1]);
-  const nopeOpacity = useTransform(x, [-130, -24], [1, 0]);
-  const superOpacity = useTransform(y, [-140, -50], [1, 0]);
+  // Штамп наливается к самому порогу: он обещает решение, которое вот-вот
+  // случится, и обещание должно совпадать с порогом свайпа.
+  const likeOpacity = useTransform(x, [18, SWIPE_DISTANCE], [0, 1]);
+  const nopeOpacity = useTransform(x, [-SWIPE_DISTANCE, -18], [1, 0]);
+  const superOpacity = useTransform(y, [-SUPER_DISTANCE, -40], [1, 0]);
   // Лёгкое затемнение фото под штампом делает решение заметнее
   const dim = useTransform([x, y], ([vx, vy]: number[]) =>
     Math.min(0.28, (Math.abs(vx) + Math.max(0, -vy)) / 600),
@@ -78,7 +146,7 @@ export default function SwipeCard({ product, rates, depth, showHint, onDecide, o
 
   function handleDragEnd(_: unknown, info: PanInfo) {
     const { offset, velocity } = info;
-    if (offset.y < -SUPER_DISTANCE && Math.abs(offset.x) < 100) return onDecide("super");
+    if (offset.y < -SUPER_DISTANCE && Math.abs(offset.x) < 80) return onDecide("super");
     if (offset.x > SWIPE_DISTANCE || velocity.x > SWIPE_VELOCITY) return onDecide("like");
     if (offset.x < -SWIPE_DISTANCE || velocity.x < -SWIPE_VELOCITY) return onDecide("dislike");
     x.set(0);
@@ -150,7 +218,7 @@ export default function SwipeCard({ product, rates, depth, showHint, onDecide, o
 
   return (
     <motion.div
-      className="absolute inset-0 touch-none select-none"
+      className="absolute inset-0 flex touch-none select-none items-center justify-center"
       style={interactive ? { x, y, rotate, zIndex: 10 } : { zIndex: 10 - depth }}
       initial={{ scale: 1 - depth * 0.04, y: depth * 14, opacity: depth > 2 ? 0 : 1 }}
       animate={{ scale: 1 - depth * 0.04, y: depth === 0 ? 0 : depth * 14, opacity: depth > 2 ? 0 : 1 }}
@@ -188,7 +256,8 @@ export default function SwipeCard({ product, rates, depth, showHint, onDecide, o
     >
       <div
         ref={cardRef}
-        className="card-shadow relative flex h-full w-full flex-col overflow-hidden rounded-[var(--radius-card)] bg-[var(--color-surface)]"
+        style={{ aspectRatio: CARD_ASPECT }}
+        className="card-shadow relative flex h-auto max-h-full w-full flex-col overflow-hidden rounded-[var(--radius-card)] bg-[var(--color-surface)]"
       >
         {/* Фотография и подпись разделены: раньше текст лежал на снимке под
             градиентом и съедал его нижнюю треть у каждой карточки. */}
@@ -251,23 +320,38 @@ export default function SwipeCard({ product, rates, depth, showHint, onDecide, o
             </>
           )}
 
-          <Stamp style={{ opacity: likeOpacity }} className="on-accent left-4 top-9 -rotate-[14deg] bg-[var(--color-like)]">
+          <Stamp style={{ opacity: likeOpacity }} className="on-accent left-4 top-28 -rotate-[14deg] bg-[var(--color-like)]">
             <IconHeart className="h-6 w-6" />
             ХОЧУ
           </Stamp>
-          <Stamp style={{ opacity: nopeOpacity }} className="right-4 top-9 rotate-[14deg] bg-[var(--color-nope)] text-white">
+          <Stamp style={{ opacity: nopeOpacity }} className="right-4 top-28 rotate-[14deg] bg-[var(--color-nope)] text-white">
             <IconX className="h-6 w-6" />
             МИМО
           </Stamp>
           <Stamp
             style={{ opacity: superOpacity }}
-            className="on-accent left-1/2 top-16 -translate-x-1/2 -rotate-[6deg] bg-[var(--color-super)]"
+            className="on-accent left-1/2 top-36 -translate-x-1/2 -rotate-[6deg] bg-[var(--color-super)]"
           >
             <IconCart className="h-6 w-6" />
             В КОРЗИНУ
           </Stamp>
 
-          <div className="absolute left-4 top-8 z-20 flex flex-col items-start gap-1.5">
+          {/* Два действия, которые свайпом не делаются: вернуть предыдущую
+              карточку и положить эту в корзину. Раньше они стояли нижним рядом
+              под карточкой и отнимали у неё полторы сотни пикселей высоты. */}
+          {interactive && (
+            <div className="absolute left-3 top-8 z-30 flex items-center gap-2">
+              <PhotoButton label="Вернуть карточку" onPress={onUndo} disabled={!canUndo}>
+                <IconUndo className="h-5 w-5" />
+              </PhotoButton>
+              <PhotoButton label="Сразу в корзину" onPress={() => onDecide("super")} accent>
+                <IconCart className="h-5 w-5" />
+              </PhotoButton>
+            </div>
+          )}
+
+          {/* Плашки переехали направо: слева теперь кнопки. */}
+          <div className="absolute right-3 top-8 z-20 flex flex-col items-end gap-1.5">
             {discount >= 10 && (
               <span className="rounded-full bg-[var(--color-nope)] px-2.5 py-1 text-[11px] font-extrabold text-white">
                 −{discount}%

@@ -19,6 +19,7 @@ export default function CartPage() {
   const setQty = useStore((s) => s.setQty);
   const removeFromCart = useStore((s) => s.removeFromCart);
   const clearCart = useStore((s) => s.clearCart);
+  const noteOrder = useStore((s) => s.noteOrder);
   const [sheet, setSheet] = useState<Product | null>(null);
 
   if (!hydrated) return <div className="flex-1" />;
@@ -157,6 +158,7 @@ export default function CartPage() {
                   href={cart[0] ? shopUrl(cart[0].product) : undefined}
                   target="_blank"
                   rel="noreferrer noopener"
+                  onClick={() => cart[0] && noteOrder(cart[0].product)}
                   className="flex items-center justify-center gap-1.5 rounded-2xl bg-[var(--color-surface-2)] px-4 py-3 text-[14px] font-semibold"
                 >
                   К товару <IconExternal className="h-4 w-4" />

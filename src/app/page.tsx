@@ -3,18 +3,16 @@
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import ActionBar from "@/components/ActionBar";
 import FilterSheet from "@/components/FilterSheet";
 import Onboarding from "@/components/Onboarding";
 import PriceDrops from "@/components/PriceDrops";
 import RejectReasonSheet from "@/components/RejectReasonSheet";
 import TasteQuiz from "@/components/TasteQuiz";
 import ProductSheet from "@/components/ProductSheet";
-import SettingsSheet from "@/components/SettingsSheet";
 import SwipeCard from "@/components/SwipeCard";
 import { prefetchImage } from "@/components/Img";
 import TopBar from "@/components/TopBar";
-import { IconCart, IconHeart, IconSearch, IconSliders } from "@/components/Icons";
+import { IconCart, IconHeart, IconSliders } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { loadNextPage } from "@/lib/feed";
 import { DAILY_GOAL, useHydrated, useStore, type Decision } from "@/lib/store";
@@ -54,7 +52,6 @@ export default function DeckPage() {
   const finishTaste = useStore((s) => s.finishTaste);
   const answerReason = useStore((s) => s.answerReason);
   const applyPrices = useStore((s) => s.applyPrices);
-  const providerLabel = useStore((s) => s.providerLabel);
   const historyLen = useStore((s) => s.history.length);
   const decide = useStore((s) => s.decide);
   const undo = useStore((s) => s.undo);
@@ -71,11 +68,9 @@ export default function DeckPage() {
   const [exitDir, setExitDir] = useState<ExitWay>("reset");
   const [sheet, setSheet] = useState<Product | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [facets, setFacets] = useState<Facets>({ categories: [], maxPrice: 0, currency: "RUB" });
-  const [catalogSize, setCatalogSize] = useState(0);
   const [burst, setBurst] = useState<{ id: number; kind: Decision } | null>(null);
   const loadingRef = useRef(false);
   const goalCelebrated = useRef(false);
@@ -122,9 +117,8 @@ export default function DeckPage() {
   useEffect(() => {
     fetch("/api/health")
       .then((r) => r.json())
-      .then((d: { facets?: Facets; catalog?: { total: number } }) => {
+      .then((d: { facets?: Facets }) => {
         if (d.facets) setFacets(d.facets);
-        if (d.catalog) setCatalogSize(d.catalog.total);
       })
       .catch(() => undefined);
   }, []);
@@ -160,7 +154,7 @@ export default function DeckPage() {
   // Клавиатура: на десктопе свайпать так же быстро, как пальцем.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (sheet || filtersOpen || settingsOpen || !onboarded || !tasted || pendingReason) return;
+      if (sheet || filtersOpen || !onboarded || !tasted || pendingReason) return;
       if (e.key === "ArrowRight") onDecide("like");
       else if (e.key === "ArrowLeft") onDecide("dislike");
       else if (e.key === "ArrowUp") onDecide("super");
@@ -173,7 +167,7 @@ export default function DeckPage() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onDecide, undo, sheet, filtersOpen, settingsOpen, onboarded, tasted, pendingReason, deck, index]);
+  }, [onDecide, undo, sheet, filtersOpen, onboarded, tasted, pendingReason, deck, index]);
 
   /** Бесконечная лента: запас карточек пополняется заранее. */
   useEffect(() => {
@@ -233,18 +227,17 @@ export default function DeckPage() {
       </AnimatePresence>
 
       <TopBar
-        daySwipes={stats.daySwipes}
-        streak={stats.streak}
         categories={facets.categories}
         active={filters.categories ?? []}
         extraFilters={extraFilters}
+        query={query}
         onToggleCategory={toggleCategory}
         onOpenFilters={() => setFiltersOpen(true)}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onClearQuery={() => applyFilters(filters, "")}
       />
 
-      <div className="relative flex-1 px-4 pb-1 pt-3">
-        <div className="absolute inset-x-4 bottom-1 top-3">
+      <div className="relative flex-1 px-4 pb-3 pt-2">
+        <div className="absolute inset-x-4 bottom-3 top-2">
           <AnimatePresence custom={exitDir} initial={false}>
             {visible
               .map((product, i) => ({ product, i }))
@@ -258,6 +251,8 @@ export default function DeckPage() {
                   showHint={i === 0 && stats.swipes < HINT_SWIPES}
                   onDecide={onDecide}
                   onOpen={() => setSheet(product)}
+                  onUndo={undo}
+                  canUndo={historyLen > 0}
                 />
               ))}
           </AnimatePresence>
@@ -305,8 +300,6 @@ export default function DeckPage() {
         </div>
       </div>
 
-      <ActionBar onDecide={onDecide} onUndo={undo} canUndo={historyLen > 0} disabled={remaining === 0} />
-
       {drops.length > 0 && <PriceDrops drops={drops} />}
 
       <ProductSheet product={sheet} onClose={() => setSheet(null)} />
@@ -324,13 +317,6 @@ export default function DeckPage() {
         onApply={applyFilters}
       />
 
-      <SettingsSheet
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        sourceLabel={providerLabel}
-        catalogSize={catalogSize}
-        baseCurrency={facets.currency}
-      />
     </div>
   );
 }

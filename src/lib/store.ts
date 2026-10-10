@@ -26,6 +26,33 @@ export type Stats = {
 export type PriceWatch = { price: number; currency: string; since: string };
 export type Account = { id: string; email: string; name?: string; createdAt: string; emailVerified?: boolean };
 
+/**
+ * Личные данные из раздела «Профиль». Лежат рядом с аккаунтом, а не внутри
+ * него: аккаунт — это способ входа (почта и пароль), а имя с телефоном человек
+ * заполняет для себя и может не заполнять вовсе.
+ */
+export type Person = { firstName: string; lastName: string; phone: string };
+const emptyPerson = (): Person => ({ firstName: "", lastName: "", phone: "" });
+
+/**
+ * Отметка о переходе в магазин. Своих заказов у витрины нет: оформление
+ * происходит на стороне AliExpress, и чем там закончилось дело, нам никто не
+ * сообщает. Поэтому «Заказы» — это список того, за чем человек туда уходил:
+ * вернуться к нужному товару через месяц иначе невозможно.
+ */
+export type OrderMark = {
+  id: string;
+  title: string;
+  image?: string;
+  price?: number;
+  currency: string;
+  /** Когда был последний переход — ISO-строка. */
+  at: string;
+};
+
+/** Сколько переходов храним: список для того, чтобы вернуться, а не архив. */
+const KEEP_ORDERS = 60;
+
 /** Что уезжает в облако при входе: всё личное, но не служебное. */
 export type SyncedProfile = {
   liked: Product[];
@@ -33,6 +60,8 @@ export type SyncedProfile = {
   cart: CartItem[];
   taste: Taste;
   sizes: SizeProfile;
+  person: Person;
+  orders: OrderMark[];
   watch: Record<string, PriceWatch>;
   rejected: string[];
   stats: Stats;
@@ -78,6 +107,8 @@ type State = {
   tasted: boolean;
   taste: Taste;
   sizes: SizeProfile;
+  person: Person;
+  orders: OrderMark[];
   watch: Record<string, PriceWatch>;
   wishTotal: number | null;
   drops: PriceDrop[];
@@ -122,6 +153,10 @@ type State = {
   finishTaste: (picked: string[], budget?: number) => void;
   answerReason: (reason: RejectReason | null) => void;
   setSizes: (sizes: SizeProfile) => void;
+  setPerson: (person: Partial<Person>) => void;
+  /** Человек ушёл в магазин за этим товаром — запоминаем, чтобы не потерялся. */
+  noteOrder: (product: Product) => void;
+  forgetOrder: (id: string) => void;
   applyPrices: (current: Record<string, number>) => void;
   dismissDrops: () => void;
   resetAll: () => void;
@@ -148,6 +183,8 @@ export const useStore = create<State>()(
       tasted: false,
       taste: emptyTaste(),
       sizes: emptySizes(),
+      person: emptyPerson(),
+      orders: [],
       watch: {},
       wishTotal: null,
       drops: [],
@@ -172,6 +209,8 @@ export const useStore = create<State>()(
           cart: s.cart,
           taste: s.taste,
           sizes: s.sizes,
+          person: s.person,
+          orders: s.orders,
           watch: s.watch,
           rejected: s.rejected,
           stats: s.stats,
@@ -192,6 +231,8 @@ export const useStore = create<State>()(
           cart: profile.cart ?? [],
           taste: profile.taste ?? emptyTaste(),
           sizes: profile.sizes ?? emptySizes(),
+          person: profile.person ?? emptyPerson(),
+          orders: profile.orders ?? [],
           watch: profile.watch ?? {},
           rejected: profile.rejected ?? [],
           stats: profile.stats ?? emptyStats(),
@@ -411,6 +452,32 @@ export const useStore = create<State>()(
 
       setSizes: (sizes) => set({ sizes, updatedAt: Date.now() }),
 
+      setPerson: (person) =>
+        set((s) => ({ person: { ...s.person, ...person }, updatedAt: Date.now() })),
+
+      /**
+       * Один товар — одна запись: повторный переход обновляет дату, а не
+       * плодит строки. Иначе список после трёх заходов в один магазин
+       * выглядит как ошибка.
+       */
+      noteOrder: (product) =>
+        set((s) => ({
+          orders: [
+            {
+              id: product.id,
+              title: product.title,
+              image: product.images[0],
+              price: product.price,
+              currency: product.currency,
+              at: new Date().toISOString(),
+            },
+            ...s.orders.filter((o) => o.id !== product.id),
+          ].slice(0, KEEP_ORDERS),
+          updatedAt: Date.now(),
+        })),
+
+      forgetOrder: (id) => set((s) => ({ orders: s.orders.filter((o) => o.id !== id), updatedAt: Date.now() })),
+
       /** Сверяет текущие цены с запомненными и собирает список подешевевших. */
       applyPrices: (current) =>
         set((s) => {
@@ -467,6 +534,9 @@ export const useStore = create<State>()(
           filters: {},
           cursor: null,
           taste: emptyTaste(),
+          // Имя и телефон остаются: это не «насвайпанное», а то, что человек
+          // заполнил о себе, и кнопка обещает убрать другое.
+          orders: [],
           watch: {},
           drops: [],
           dropsSeen: true,
@@ -498,6 +568,8 @@ export const useStore = create<State>()(
         tasted: s.tasted,
         taste: s.taste,
         sizes: s.sizes,
+        person: s.person,
+        orders: s.orders,
         watch: s.watch,
         wishTotal: s.wishTotal,
         // Счётчик обязан пережить перезагрузку, иначе «раз в 200» не накопится.

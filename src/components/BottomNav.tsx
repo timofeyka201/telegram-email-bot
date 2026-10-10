@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { IconBookmark, IconCart, IconHeart, IconLayers } from "./Icons";
+import { IconBookmark, IconCart, IconHeart, IconLayers, IconUser } from "./Icons";
 import { useHydrated, useStore } from "@/lib/store";
 
 /**
@@ -16,6 +16,7 @@ const items = [
   { href: "/likes", label: "Избранное", Icon: IconHeart, badge: "like" },
   { href: "/wishlist", label: "Вишлист", Icon: IconBookmark, badge: "like" },
   { href: "/cart", label: "Корзина", Icon: IconCart, badge: "brand" },
+  { href: "/profile", label: "Профиль", Icon: IconUser, badge: "brand" },
 ] as const;
 
 export default function BottomNav() {
@@ -28,7 +29,9 @@ export default function BottomNav() {
 
   return (
     <nav className="safe-bottom sticky bottom-0 z-40 border-t border-[var(--color-line)] bg-[var(--color-surface)]">
-      <div className="mx-auto grid max-w-[480px] grid-cols-4 px-2 pb-2 pt-2">
+      {/* Пять разделов вместо четырёх: подписи стали на пункт мельче, иначе
+          «Избранное» не укладывается в пятую часть узкого экрана. */}
+      <div className="mx-auto grid max-w-[480px] grid-cols-5 px-1 pb-2 pt-2">
         {items.map(({ href, label, Icon, badge }) => {
           // Чужой вишлист лежит на /wishlist/КОД — вкладка должна оставаться подсвеченной.
           const active = pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
@@ -38,11 +41,11 @@ export default function BottomNav() {
               key={href}
               href={href}
               aria-current={active ? "page" : undefined}
-              className={`flex flex-col items-center gap-1 text-[12px] transition-colors ${
+              className={`flex min-w-0 flex-col items-center gap-1 text-[11px] transition-colors ${
                 active ? "font-bold text-[var(--color-ink)]" : "font-semibold text-[var(--color-muted)]"
               }`}
             >
-              <span className="relative flex h-8 w-14 items-center justify-center">
+              <span className="relative flex h-8 w-12 items-center justify-center">
                 {active && (
                   <motion.span
                     layoutId="nav-pill"
@@ -53,7 +56,7 @@ export default function BottomNav() {
                 <Icon className={`relative h-[22px] w-[22px] ${active ? "text-[var(--color-brand)]" : ""}`} />
                 {!!count && (
                   <span
-                    className={`tnum absolute -top-0.5 right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] font-extrabold on-accent ${
+                    className={`tnum absolute -top-0.5 right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] font-extrabold on-accent ${
                       badge === "brand" ? "bg-[var(--color-brand)]" : "bg-[var(--color-like)]"
                     }`}
                   >
