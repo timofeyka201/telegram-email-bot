@@ -3,6 +3,7 @@ import { categoryLabel } from "../categories";
 import type { Product } from "../types";
 import { toRub } from "../money";
 import type { TasteHint } from "../taste";
+import { searchCatalog } from "../search";
 import { decodeCursor, encodeCursor, mulberry32, shuffle, type Filters, type PageArgs, type Provider, type ProviderPage } from "./types";
 
 /**
@@ -77,15 +78,6 @@ export function meta(): { kind: string; generatedAt: string | null; total: numbe
   return { ...info, categories: catalogCategories() };
 }
 
-/** Поиск по названию, категории, бренду и характеристикам — без внешних сервисов. */
-function match(p: Product, q: string): boolean {
-  const needle = q.toLowerCase();
-  if (p.title.toLowerCase().includes(needle)) return true;
-  if (p.category?.toLowerCase().includes(needle)) return true;
-  if (p.brand?.toLowerCase().includes(needle)) return true;
-  return p.attributes.some((a) => a.value.toLowerCase().includes(needle));
-}
-
 /** Фильтры применяются к своей базе — у неё есть и категории, и цены. */
 function passes(p: Product, f?: Filters): boolean {
   if (!f) return true;
@@ -145,6 +137,27 @@ export const localProvider: Provider = {
     // Отвергнутое исключаем жёстко: свайп влево — это «больше не показывай».
     const banned = new Set(hint?.exclude ?? []);
 
+    /*
+     * Поиск идёт отдельной дорогой.
+     *
+     * Выдача по запросу упорядочена близостью к нему, а не вкусом и не
+     * случайностью: человек, набравший «красное платье», ждёт красных платьев,
+     * а не того, что ему обычно нравится. Круги здесь тоже ни к чему —
+     * найденное конечно, и когда оно кончится, честнее так и сказать.
+     */
+    if (query.trim()) {
+      const { ranked, total, loose } = searchCatalog(all, query, {
+        accept: (p) => passes(p, filters),
+        filterKey: JSON.stringify(filters ?? {}),
+      });
+      const found: Product[] = [];
+      let i = offset;
+      for (; i < ranked.length && found.length < PAGE; i++) {
+        if (!banned.has(ranked[i].id)) found.push(ranked[i]);
+      }
+      return { products: found, cursor: encodeCursor(i, 0), looped: false, total, loose };
+    }
+
     /** Отбор подряд с места остановки: что набрали и докуда дошли. */
     const collect = (list: Product[], from: number, strict: boolean) => {
       const found: Product[] = [];
@@ -152,7 +165,6 @@ export const localProvider: Provider = {
       for (; i < list.length && found.length < WINDOW; i++) {
         const p = list[i];
         if (banned.has(p.id)) continue;
-        if (strict && query && !match(p, query)) continue;
         if (strict && !passes(p, filters)) continue;
         found.push(p);
       }
@@ -179,8 +191,9 @@ export const localProvider: Provider = {
     for (let r = round, from = offset, pass = 0; pass < 2; pass++, r += 1, from = 0) {
       const ordered = shuffle(all, seed + r * 104729);
       let { found, next } = collect(ordered, from, true);
-      // Под запрос и фильтры не подошло ничего: показываем витрину целиком,
-      // а не пустой экран.
+      // Под фильтры не подошло ничего: показываем витрину целиком, а не
+      // пустой экран. С поиском так делать нельзя — там это была бы подмена
+      // выдачи, — а фильтры человек видит и может снять.
       if (!found.length) ({ found, next } = collect(ordered, from, false));
       if (!found.length) continue;
 

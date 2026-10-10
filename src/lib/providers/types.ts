@@ -27,6 +27,10 @@ export type ProviderPage = {
   cursor: string;
   /** каталог пошёл на новый круг */
   looped: boolean;
+  /** сколько всего нашлось по запросу: это число показывается человеку */
+  total?: number;
+  /** нашлось только по части слов запроса */
+  loose?: boolean;
 };
 
 export type Provider = {

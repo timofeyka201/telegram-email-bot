@@ -12,9 +12,10 @@ import ProductSheet from "@/components/ProductSheet";
 import SwipeCard from "@/components/SwipeCard";
 import { prefetchImage } from "@/components/Img";
 import TopBar from "@/components/TopBar";
-import { IconCart, IconHeart, IconSliders } from "@/components/Icons";
+import { IconCart, IconHeart, IconSearch, IconSliders } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { loadNextPage } from "@/lib/feed";
+import { plural } from "@/lib/money";
 import { DAILY_GOAL, useHydrated, useStore, type Decision } from "@/lib/store";
 import type { ExitWay } from "@/components/SwipeCard";
 import type { Product } from "@/lib/types";
@@ -69,6 +70,10 @@ export default function DeckPage() {
   const [sheet, setSheet] = useState<Product | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
+  /** Итог поиска: сколько нашлось и показано ли уже всё. */
+  const [search, setSearch] = useState<{ total: number } | null>(null);
+  /** По какому запросу уже предупреждали, что точного совпадения нет. */
+  const looseWarned = useRef<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [facets, setFacets] = useState<Facets>({ categories: [], maxPrice: 0, currency: "RUB" });
   const [burst, setBurst] = useState<{ id: number; kind: Decision } | null>(null);
@@ -178,13 +183,25 @@ export default function DeckPage() {
     setLoading(true);
     loadNextPage()
       .then((res) => {
-        if (!res.ok) setFeedError(res.error ?? "Источник не ответил");
+        if (!res.ok) {
+          setFeedError(res.error ?? "Источник не ответил");
+          return;
+        }
+        // Поиск, по которому больше нечего показать, — не ошибка ленты:
+        // о нём рассказывает отдельный экран.
+        if (res.noMore) setSearch({ total: res.total ?? 0 });
+        // Все слова разом не нашлись. Молчать об этом нельзя: человек решит,
+        // что поиск показывает что попало.
+        if (res.loose && looseWarned.current !== query) {
+          looseWarned.current = query;
+          toast("Точного совпадения нет — показываем по части запроса", "warn");
+        }
       })
       .finally(() => {
         loadingRef.current = false;
         setLoading(false);
       });
-  }, [hydrated, remaining, feedError, cursor]);
+  }, [hydrated, remaining, feedError, cursor, query]);
 
   useEffect(() => {
     if (stats.daySwipes >= DAILY_GOAL && !goalCelebrated.current) {
@@ -198,6 +215,7 @@ export default function DeckPage() {
     const list = filters.categories ?? [];
     setFilters({ ...filters, categories: list.includes(c) ? list.filter((x) => x !== c) : [...list, c] });
     setFeedError(null);
+    setSearch(null);
   };
 
   /** Поиск и фильтры применяются вместе: обе правки пересобирают ленту разом. */
@@ -205,6 +223,7 @@ export default function DeckPage() {
     useStore.setState({ query: q });
     setFilters(f);
     setFeedError(null);
+    setSearch(null);
   };
 
   if (!hydrated) {
@@ -261,12 +280,15 @@ export default function DeckPage() {
             <Interlude
               loading={loading}
               error={feedError}
+              query={query}
+              search={search}
               hasFilters={extraFilters + (filters.categories?.length ?? 0) > 0}
               onRetry={() => {
                 loadingRef.current = false;
                 setFeedError(null);
               }}
               onClearFilters={() => applyFilters({}, "")}
+              onOpenSearch={() => setFiltersOpen(true)}
             />
           )}
 
@@ -321,20 +343,72 @@ export default function DeckPage() {
   );
 }
 
-/** Пауза между страницами ленты: либо ждём загрузку, либо объясняем сбой. */
+/**
+ * Пауза между страницами ленты: ждём загрузку, объясняем сбой — или
+ * рассказываем, чем кончился поиск. Последнее раньше выглядело как сбой
+ * источника: «Лента прервалась», хотя прервалось ровно ничего, просто по
+ * запросу нечего показать.
+ */
 function Interlude({
   loading,
   error,
+  query,
+  search,
   hasFilters,
   onRetry,
   onClearFilters,
+  onOpenSearch,
 }: {
   loading: boolean;
   error: string | null;
+  query: string;
+  search: { total: number } | null;
   hasFilters: boolean;
   onRetry: () => void;
   onClearFilters: () => void;
+  onOpenSearch: () => void;
 }) {
+  if (search && query) {
+    const nothing = search.total === 0;
+    return (
+      <div className="card-shadow absolute inset-0 flex flex-col items-center justify-center gap-4 rounded-[var(--radius-card)] bg-[var(--color-surface)] px-8 text-center">
+        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-[var(--color-muted)]">
+          <IconSearch className="h-7 w-7" />
+        </span>
+        <div>
+          <h2 className="font-display text-[19px] font-bold">
+            {nothing ? "Ничего не нашлось" : "Это всё по запросу"}
+          </h2>
+          <p className="mt-1.5 text-[14px] leading-snug text-[var(--color-muted)]">
+            {nothing ? (
+              <>
+                По запросу «{query}» на витрине ничего нет. Попробуйте одно слово вместо нескольких
+                или другое название.
+              </>
+            ) : (
+              <>
+                По запросу «{query}» нашлось {search.total.toLocaleString("ru-RU")}{" "}
+                {plural(search.total, "карточка", "карточки", "карточек")} — вы посмотрели все.
+              </>
+            )}
+          </p>
+        </div>
+        <div className="flex w-full flex-col gap-2">
+          <button type="button" onClick={onOpenSearch} className="brand-gradient rounded-full py-3.5 text-[15px] font-bold">
+            Изменить запрос
+          </button>
+          <button
+            type="button"
+            onClick={onClearFilters}
+            className="rounded-2xl bg-[var(--color-surface-2)] py-3.5 text-[15px] font-semibold"
+          >
+            Вернуться ко всей витрине
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="card-shadow absolute inset-0 flex flex-col items-center justify-center gap-4 rounded-[var(--radius-card)] bg-[var(--color-surface)] px-8 text-center">
       {loading || !error ? (

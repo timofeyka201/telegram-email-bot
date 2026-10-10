@@ -40,6 +40,8 @@ export async function POST(req: NextRequest) {
   const chain = [requested, ...PROVIDERS.filter((p) => p.id !== requested.id && p.ready())];
   const problems: string[] = [];
   const startedAt = Date.now();
+  /** Источник ответил, но по запросу у него пусто. */
+  let empty: { provider: (typeof chain)[number]; total: number } | null = null;
 
   for (const provider of chain) {
     if (Date.now() - startedAt > BUDGET_MS) {
@@ -55,6 +57,13 @@ export async function POST(req: NextRequest) {
     try {
       const page = await provider.page({ query, cursor, seed, filters: body.filters, hint: body.hint });
       if (!page.products.length) {
+        // Поиск, не нашедший ничего, — это ответ, а не сбой источника.
+        // Раньше он попадал в ту же корзину, что упавшее API, и человек
+        // видел «Лента прервалась» вместо «по запросу ничего нет».
+        // Запоминаем самый богатый ответ: следом в цепочке стоит офлайн-
+        // подборка на дюжину карточек, и её ноль не должен затирать «по
+        // запросу нашлось сорок, вы их посмотрели».
+        if (query && (page.total ?? 0) >= (empty?.total ?? -1)) empty = { provider, total: page.total ?? 0 };
         problems.push(`${provider.label}: пусто по запросу «${query || "витрина"}»`);
         continue;
       }
@@ -64,11 +73,26 @@ export async function POST(req: NextRequest) {
         provider: provider.id,
         providerLabel: provider.label,
         looped: page.looped,
+        total: page.total,
+        loose: page.loose,
       };
       return NextResponse.json(result);
     } catch (e) {
       problems.push(`${provider.label}: ${e instanceof Error ? e.message : "ошибка"}`);
     }
+  }
+
+  if (empty) {
+    const result: FeedPage = {
+      products: [],
+      cursor: body.cursor ?? "0.0",
+      provider: empty.provider.id,
+      providerLabel: empty.provider.label,
+      looped: false,
+      total: empty.total,
+      noMore: true,
+    };
+    return NextResponse.json(result);
   }
 
   return NextResponse.json(
