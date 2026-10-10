@@ -58,7 +58,7 @@ export default function InstallBlock() {
               const outcome = await install();
               if (outcome === "accepted") toast("Приложение установлено", "like");
             }}
-            className="brand-gradient mt-3 w-full rounded-xl py-2.5 text-[14px] font-bold text-white"
+            className="brand-gradient mt-3 w-full rounded-full py-2.5 text-[14px] font-bold"
           >
             Установить
           </button>
@@ -77,7 +77,7 @@ export default function InstallBlock() {
             <button
               type="button"
               onClick={copyLink}
-              className="brand-gradient mt-3 w-full rounded-xl py-2.5 text-[14px] font-bold text-white"
+              className="brand-gradient mt-3 w-full rounded-full py-2.5 text-[14px] font-bold"
             >
               Скопировать ссылку
             </button>

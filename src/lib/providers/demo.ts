@@ -1,4 +1,5 @@
 import { DEMO_PRODUCTS } from "../demo";
+import { searchCatalog } from "../search";
 import type { Product } from "../types";
 import { decodeCursor, encodeCursor, shuffle, type PageArgs, type Provider, type ProviderPage } from "./types";
 
@@ -17,12 +18,17 @@ export const demoProvider: Provider = {
 
   async page({ query, cursor, seed }: PageArgs): Promise<ProviderPage> {
     const { offset, round } = decodeCursor(cursor);
-    const pool = query
-      ? DEMO_PRODUCTS.filter((p) => p.title.toLowerCase().includes(query.toLowerCase()))
-      : DEMO_PRODUCTS;
-    const source = pool.length ? pool : DEMO_PRODUCTS;
 
-    const ordered = shuffle(source, seed + round * 104729);
+    // По запросу отдаём только найденное. Раньше, не найдя ничего, подборка
+    // возвращала всё подряд — и человек видел дюжину случайных карточек там,
+    // где ждал результатов поиска.
+    if (query.trim()) {
+      const { ranked, total, loose } = searchCatalog(DEMO_PRODUCTS, query);
+      const slice = ranked.slice(offset, offset + PAGE);
+      return { products: slice, cursor: encodeCursor(offset + PAGE, round), looped: false, total, loose };
+    }
+
+    const ordered = shuffle(DEMO_PRODUCTS, seed + round * 104729);
     const slice = ordered.slice(offset, offset + PAGE);
     const wrapped = offset + PAGE >= ordered.length;
 

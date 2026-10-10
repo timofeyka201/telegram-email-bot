@@ -32,7 +32,7 @@ function Item({ t }: { t: Toast }) {
 
   const tone =
     t.tone === "like"
-      ? "bg-[var(--color-like)] text-white"
+      ? "bg-[var(--color-like)] on-accent"
       : t.tone === "warn"
         ? "bg-[var(--color-nope)] text-white"
         : "bg-[var(--color-ink)] text-[var(--color-bg)]";

@@ -19,8 +19,8 @@ export default function manifest(): MetadataRoute.Manifest {
     // оставляют как запасной вариант для тех, кто это поле не знает.
     display_override: ["standalone", "minimal-ui"],
     orientation: "portrait",
-    background_color: "#f5f4fa",
-    theme_color: "#5b3df5",
+    background_color: "#eceef2",
+    theme_color: "#ff5b2e",
     lang: "ru",
     categories: ["shopping", "lifestyle"],
     icons: [
@@ -28,7 +28,6 @@ export default function manifest(): MetadataRoute.Manifest {
       { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
       // maskable система обрезает под форму своих иконок, поэтому он отдельный.
       { src: "/icons/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
-      { src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
     ],
     shortcuts: [
       { name: "Избранное", short_name: "Избранное", url: "/likes" },

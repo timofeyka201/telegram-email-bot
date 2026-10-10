@@ -26,6 +26,33 @@ export type Stats = {
 export type PriceWatch = { price: number; currency: string; since: string };
 export type Account = { id: string; email: string; name?: string; createdAt: string; emailVerified?: boolean };
 
+/**
+ * Личные данные из раздела «Профиль». Лежат рядом с аккаунтом, а не внутри
+ * него: аккаунт — это способ входа (почта и пароль), а имя с телефоном человек
+ * заполняет для себя и может не заполнять вовсе.
+ */
+export type Person = { firstName: string; lastName: string; phone: string };
+const emptyPerson = (): Person => ({ firstName: "", lastName: "", phone: "" });
+
+/**
+ * Отметка о переходе в магазин. Своих заказов у витрины нет: оформление
+ * происходит на стороне AliExpress, и чем там закончилось дело, нам никто не
+ * сообщает. Поэтому «Заказы» — это список того, за чем человек туда уходил:
+ * вернуться к нужному товару через месяц иначе невозможно.
+ */
+export type OrderMark = {
+  id: string;
+  title: string;
+  image?: string;
+  price?: number;
+  currency: string;
+  /** Когда был последний переход — ISO-строка. */
+  at: string;
+};
+
+/** Сколько переходов храним: список для того, чтобы вернуться, а не архив. */
+const KEEP_ORDERS = 60;
+
 /** Что уезжает в облако при входе: всё личное, но не служебное. */
 export type SyncedProfile = {
   liked: Product[];
@@ -33,10 +60,11 @@ export type SyncedProfile = {
   cart: CartItem[];
   taste: Taste;
   sizes: SizeProfile;
+  person: Person;
+  orders: OrderMark[];
   watch: Record<string, PriceWatch>;
   rejected: string[];
   stats: Stats;
-  rates: Record<string, number>;
   tasted: boolean;
   updatedAt: number;
 };
@@ -53,7 +81,7 @@ export const DAILY_GOAL = 20;
  */
 export const ASK_REASON_EVERY = 200;
 
-/** Лента бесконечна, поэтому просмотренные карточки periodically выбрасываем. */
+/** Лента бесконечна, поэтому просмотренные карточки время от времени выбрасываем. */
 const KEEP_BEHIND = 12;
 const TRIM_AT = 60;
 
@@ -69,6 +97,8 @@ type State = {
   history: HistoryEntry[];
   stats: Stats;
   rates: Record<string, number>;
+  /** Откуда и на какой день взят курс — для подписи под ценой. */
+  rateInfo: { date: string | null; source: string } | null;
   query: string;
   filters: Filters;
   theme: "system" | "light" | "dark";
@@ -77,7 +107,10 @@ type State = {
   tasted: boolean;
   taste: Taste;
   sizes: SizeProfile;
+  person: Person;
+  orders: OrderMark[];
   watch: Record<string, PriceWatch>;
+  wishTotal: number | null;
   drops: PriceDrop[];
   dropsSeen: boolean;
   dislikesSinceAsk: number;
@@ -100,17 +133,30 @@ type State = {
   unlike: (id: string) => void;
   like: (product: Product) => void;
   toggleWish: (product: Product) => void;
+  /** Вишлист приехал с сервера: локальная копия должна совпасть с ним целиком. */
+  setWishlist: (products: Product[]) => void;
+  /**
+   * Сколько желаний в серверном списке. Локальная копия хранит только карточки
+   * из ленты, поэтому считать значок в меню по ней — значит показывать
+   * заниженное число тому, кто добавил своих желаний.
+   */
+  setWishTotal: (total: number | null) => void;
   addToCart: (product: Product, sku?: string) => void;
   setQty: (id: string, qty: number) => void;
   removeFromCart: (id: string) => void;
   clearCart: () => void;
-  setRate: (currency: string, rate: number) => void;
+  /** Курс приехал с сервера: он общий для всех и руками не правится. */
+  setRates: (rates: Record<string, number>, info: { date: string | null; source: string }) => void;
   setFilters: (filters: Filters) => void;
   setTheme: (theme: "system" | "light" | "dark") => void;
   finishOnboarding: () => void;
   finishTaste: (picked: string[], budget?: number) => void;
   answerReason: (reason: RejectReason | null) => void;
   setSizes: (sizes: SizeProfile) => void;
+  setPerson: (person: Partial<Person>) => void;
+  /** Человек ушёл в магазин за этим товаром — запоминаем, чтобы не потерялся. */
+  noteOrder: (product: Product) => void;
+  forgetOrder: (id: string) => void;
   applyPrices: (current: Record<string, number>) => void;
   dismissDrops: () => void;
   resetAll: () => void;
@@ -129,6 +175,7 @@ export const useStore = create<State>()(
       history: [],
       stats: emptyStats(),
       rates: { ...DEFAULT_RATES },
+      rateInfo: null,
       query: "",
       filters: {},
       theme: "system",
@@ -136,7 +183,10 @@ export const useStore = create<State>()(
       tasted: false,
       taste: emptyTaste(),
       sizes: emptySizes(),
+      person: emptyPerson(),
+      orders: [],
       watch: {},
+      wishTotal: null,
       drops: [],
       dropsSeen: true,
       dislikesSinceAsk: 0,
@@ -148,7 +198,8 @@ export const useStore = create<State>()(
       cursor: null,
       seed: Math.floor(Math.random() * 1e9),
 
-      setAccount: (account) => set({ account }),
+      // Выход должен уносить и счётчик: чужое число желаний в меню — мелочь, но вранье.
+      setAccount: (account) => set(account ? { account } : { account: null, wishTotal: null }),
 
       exportProfile: () => {
         const s = get();
@@ -158,10 +209,11 @@ export const useStore = create<State>()(
           cart: s.cart,
           taste: s.taste,
           sizes: s.sizes,
+          person: s.person,
+          orders: s.orders,
           watch: s.watch,
           rejected: s.rejected,
           stats: s.stats,
-          rates: s.rates,
           tasted: s.tasted,
           updatedAt: s.updatedAt,
         };
@@ -179,10 +231,11 @@ export const useStore = create<State>()(
           cart: profile.cart ?? [],
           taste: profile.taste ?? emptyTaste(),
           sizes: profile.sizes ?? emptySizes(),
+          person: profile.person ?? emptyPerson(),
+          orders: profile.orders ?? [],
           watch: profile.watch ?? {},
           rejected: profile.rejected ?? [],
           stats: profile.stats ?? emptyStats(),
-          rates: profile.rates ?? { ...DEFAULT_RATES },
           tasted: profile.tasted ?? false,
           updatedAt: profile.updatedAt ?? Date.now(),
           // Лента пересобирается: чужие отказы и вкусы меняют выдачу.
@@ -227,7 +280,7 @@ export const useStore = create<State>()(
 
         const cart =
           decision === "super" && !s.cart.some((c) => c.product.id === product.id)
-            ? [{ product, qty: product.minOrder && product.minOrder > 1 ? product.minOrder : 1 }, ...s.cart]
+            ? [{ product, qty: 1 }, ...s.cart]
             : s.cart;
 
         let deck = s.deck;
@@ -269,10 +322,23 @@ export const useStore = create<State>()(
         return product;
       },
 
+      /**
+       * Отмена последнего решения.
+       *
+       * Колода подрезается по мере просмотра — позади остаётся десяток
+       * карточек, а история решений хранит тридцать. Раньше отмена просто
+       * отступала на шаг назад по колоде и за её краем переставала работать:
+       * кнопка нажималась, карточка дёргалась, прежняя не возвращалась.
+       * Теперь карточку берём из истории и, если в колоде её уже нет,
+       * ставим обратно сами — что обещано кнопкой, то и происходит.
+       */
       undo: () =>
         set((s) => {
           const [last, ...rest] = s.history;
-          if (!last || s.index === 0) return s;
+          if (!last) return s;
+          const inDeck = s.index > 0 && s.deck[s.index - 1]?.id === last.product.id;
+          const deck = inDeck ? s.deck : [last.product, ...s.deck.slice(s.index)];
+          const index = inDeck ? s.index - 1 : 0;
           const stats = { ...s.stats };
           stats.swipes = Math.max(0, stats.swipes - 1);
           stats.daySwipes = Math.max(0, stats.daySwipes - 1);
@@ -281,7 +347,8 @@ export const useStore = create<State>()(
             stats.streak = Math.max(0, stats.streak - 1);
           }
           return {
-            index: s.index - 1,
+            deck,
+            index,
             history: rest,
             liked: last.decision === "dislike" ? s.liked : s.liked.filter((p) => p.id !== last.product.id),
             cart: last.decision === "super" ? s.cart.filter((c) => c.product.id !== last.product.id) : s.cart,
@@ -310,11 +377,31 @@ export const useStore = create<State>()(
             : { wishlist: [product, ...s.wishlist], watch: rememberPrice(s.watch, product), updatedAt: Date.now() };
         }),
 
+      setWishTotal: (total) => set({ wishTotal: total }),
+
+      setWishlist: (products) =>
+        set((s) => {
+          const same =
+            s.wishlist.length === products.length && s.wishlist.every((p, i) => p.id === products[i].id);
+          // Без этой проверки страница, обновляющая копию после каждой загрузки,
+          // толкала бы синхронизацию профиля по кругу.
+          if (same) return s;
+          let watch = s.watch;
+          for (const p of products) watch = rememberPrice(watch, p);
+          return { wishlist: products, watch, updatedAt: Date.now() };
+        }),
+
+      /**
+       * Всегда одна штука. Раньше количество подставлялось из minOrder —
+       * минимальной партии у продавца, — и человек, положивший тушь для
+       * ресниц, находил в корзине сорок восемь штук, ничего для этого не
+       * сделав. Минимум продавца — это справка, а не решение за покупателя:
+       * заказ всё равно оформляется на стороне магазина.
+       */
       addToCart: (product, sku) =>
         set((s) => {
           if (s.cart.some((c) => c.product.id === product.id)) return s;
-          const qty = product.minOrder && product.minOrder > 1 ? product.minOrder : 1;
-          return { cart: [{ product, qty, sku }, ...s.cart], watch: rememberPrice(s.watch, product), updatedAt: Date.now() };
+          return { cart: [{ product, qty: 1, sku }, ...s.cart], watch: rememberPrice(s.watch, product), updatedAt: Date.now() };
         }),
 
       setQty: (id, qty) =>
@@ -327,7 +414,8 @@ export const useStore = create<State>()(
 
       clearCart: () => set({ cart: [], updatedAt: Date.now() }),
 
-      setRate: (currency, rate) => set((s) => ({ rates: { ...s.rates, [currency]: rate > 0 ? rate : 1 } })),
+      setRates: (rates, info) =>
+        set((s) => ({ rates: { ...s.rates, ...rates, RUB: 1 }, rateInfo: info })),
 
       setFilters: (filters) =>
         set((s) => ({
@@ -378,6 +466,32 @@ export const useStore = create<State>()(
 
       setSizes: (sizes) => set({ sizes, updatedAt: Date.now() }),
 
+      setPerson: (person) =>
+        set((s) => ({ person: { ...s.person, ...person }, updatedAt: Date.now() })),
+
+      /**
+       * Один товар — одна запись: повторный переход обновляет дату, а не
+       * плодит строки. Иначе список после трёх заходов в один магазин
+       * выглядит как ошибка.
+       */
+      noteOrder: (product) =>
+        set((s) => ({
+          orders: [
+            {
+              id: product.id,
+              title: product.title,
+              image: product.images[0],
+              price: product.price,
+              currency: product.currency,
+              at: new Date().toISOString(),
+            },
+            ...s.orders.filter((o) => o.id !== product.id),
+          ].slice(0, KEEP_ORDERS),
+          updatedAt: Date.now(),
+        })),
+
+      forgetOrder: (id) => set((s) => ({ orders: s.orders.filter((o) => o.id !== id), updatedAt: Date.now() })),
+
       /** Сверяет текущие цены с запомненными и собирает список подешевевших. */
       applyPrices: (current) =>
         set((s) => {
@@ -422,6 +536,9 @@ export const useStore = create<State>()(
           index: 0,
           liked: [],
           wishlist: [],
+          // Иначе значок в меню продолжает показывать число желаний,
+          // приехавшее с сервера до очистки.
+          wishTotal: null,
           seen: [],
           rejected: [],
           cart: [],
@@ -431,6 +548,9 @@ export const useStore = create<State>()(
           filters: {},
           cursor: null,
           taste: emptyTaste(),
+          // Имя и телефон остаются: это не «насвайпанное», а то, что человек
+          // заполнил о себе, и кнопка обещает убрать другое.
+          orders: [],
           watch: {},
           drops: [],
           dropsSeen: true,
@@ -451,7 +571,10 @@ export const useStore = create<State>()(
         rejected: s.rejected.slice(0, 2000),
         cart: s.cart,
         stats: s.stats,
+        // Последний известный курс переживает перезагрузку: цены видны сразу,
+        // не дожидаясь ответа сервера.
         rates: s.rates,
+        rateInfo: s.rateInfo,
         query: s.query,
         filters: s.filters,
         theme: s.theme,
@@ -459,7 +582,10 @@ export const useStore = create<State>()(
         tasted: s.tasted,
         taste: s.taste,
         sizes: s.sizes,
+        person: s.person,
+        orders: s.orders,
         watch: s.watch,
+        wishTotal: s.wishTotal,
         // Счётчик обязан пережить перезагрузку, иначе «раз в 200» не накопится.
         dislikesSinceAsk: s.dislikesSinceAsk,
         account: s.account,

@@ -65,7 +65,7 @@ export default function FilterSheet({ open, onClose, categories, maxPrice, curre
           <button
             type="button"
             onClick={apply}
-            className="brand-gradient flex-1 rounded-2xl py-3.5 text-[15px] font-bold text-white"
+            className="brand-gradient flex-1 rounded-full py-3.5 text-[15px] font-bold"
           >
             Показать
           </button>

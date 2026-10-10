@@ -3,6 +3,7 @@ import { categoryLabel } from "../categories";
 import type { Product } from "../types";
 import { toRub } from "../money";
 import type { TasteHint } from "../taste";
+import { searchCatalog } from "../search";
 import { decodeCursor, encodeCursor, mulberry32, shuffle, type Filters, type PageArgs, type Provider, type ProviderPage } from "./types";
 
 /**
@@ -16,7 +17,13 @@ import { decodeCursor, encodeCursor, mulberry32, shuffle, type Filters, type Pag
  * перезапуска приложения.
  */
 
-const PAGE = 12;
+const PAGE = 18;
+/**
+ * Сколько карточек просматривается, чтобы набрать страницу. Из окна берутся
+ * лучшие по вкусу, остальные в этом круге уже не покажутся: при каталоге в сто
+ * тысяч позиций потеря не имеет значения, а подбор становится заметным.
+ */
+const WINDOW = PAGE * 3;
 
 /**
  * Категории приходят из разных источников разными слагами: «furniture» и
@@ -71,15 +78,6 @@ export function meta(): { kind: string; generatedAt: string | null; total: numbe
   return { ...info, categories: catalogCategories() };
 }
 
-/** Поиск по названию, категории, бренду и характеристикам — без внешних сервисов. */
-function match(p: Product, q: string): boolean {
-  const needle = q.toLowerCase();
-  if (p.title.toLowerCase().includes(needle)) return true;
-  if (p.category?.toLowerCase().includes(needle)) return true;
-  if (p.brand?.toLowerCase().includes(needle)) return true;
-  return p.attributes.some((a) => a.value.toLowerCase().includes(needle));
-}
-
 /** Фильтры применяются к своей базе — у неё есть и категории, и цены. */
 function passes(p: Product, f?: Filters): boolean {
   if (!f) return true;
@@ -113,9 +111,15 @@ function score(p: Product, hint: TasteHint | undefined, rnd: () => number): numb
   return value;
 }
 
+/** Название источника по снапшоту: витрина на AliExpress не должна называться
+ *  «своей базой» — человек видит этот ярлык в настройках. */
+const SNAPSHOT_LABEL: Record<string, string> = { ae: "AliExpress", etsy: "Etsy", global: "Открытый каталог" };
+
 export const localProvider: Provider = {
   id: "local",
-  label: "Своя база",
+  get label() {
+    return SNAPSHOT_LABEL[catalogInfo().kind] ?? "Своя база";
+  },
   get note() {
     return `${catalogProducts().length} карточек в снапшоте. Работает всегда, без внешних API.`;
   },
@@ -128,38 +132,86 @@ export const localProvider: Provider = {
     // Снимок берём один раз на запрос: между строками он может смениться, если
     // импортёр как раз дописал новый.
     const all = catalogProducts();
+    if (!all.length) return { products: [], cursor: encodeCursor(0, round), looped: false };
 
     // Отвергнутое исключаем жёстко: свайп влево — это «больше не показывай».
     const banned = new Set(hint?.exclude ?? []);
-    const pool = all.filter(
-      (p) => !banned.has(p.id) && (query ? match(p, query) : true) && passes(p, filters),
-    );
-    // Пустой результат — не повод показывать пустоту: откатываемся к витрине.
-    const source = pool.length ? pool : all.filter((p) => !banned.has(p.id));
-    if (!source.length) return { products: [], cursor: encodeCursor(0, round), looped: false };
 
-    // Порядок свой на каждый круг и на каждую сессию — лента не повторяется.
-    const rnd = mulberry32(seed + round * 104729);
-    const ordered = hint
-      ? source
-          .map((p) => ({ p, s: score(p, hint, rnd) }))
-          .sort((a, b) => b.s - a.s)
-          .map((x) => x.p)
-      : shuffle(source, seed + round * 104729);
-    const slice = ordered.slice(offset, offset + PAGE);
-
-    // Каталог конечен, поэтому на краю начинаем новый круг: карточки в ленте
-    // не заканчиваются, а суффикс круга не даёт совпасть идентификаторам.
-    if (!slice.length) {
-      const next = shuffle(source, seed + (round + 1) * 104729).slice(0, PAGE);
-      return {
-        products: next.map((p) => ({ ...p, id: `${p.id}-r${round + 1}` })),
-        cursor: encodeCursor(PAGE, round + 1),
-        looped: true,
-      };
+    /*
+     * Поиск идёт отдельной дорогой.
+     *
+     * Выдача по запросу упорядочена близостью к нему, а не вкусом и не
+     * случайностью: человек, набравший «красное платье», ждёт красных платьев,
+     * а не того, что ему обычно нравится. Круги здесь тоже ни к чему —
+     * найденное конечно, и когда оно кончится, честнее так и сказать.
+     */
+    if (query.trim()) {
+      const { ranked, total, loose } = searchCatalog(all, query, {
+        accept: (p) => passes(p, filters),
+        filterKey: JSON.stringify(filters ?? {}),
+      });
+      const found: Product[] = [];
+      let i = offset;
+      for (; i < ranked.length && found.length < PAGE; i++) {
+        if (!banned.has(ranked[i].id)) found.push(ranked[i]);
+      }
+      return { products: found, cursor: encodeCursor(i, 0), looped: false, total, loose };
     }
 
-    const products = round > 0 ? slice.map((p) => ({ ...p, id: `${p.id}-r${round}` })) : slice;
-    return { products, cursor: encodeCursor(offset + PAGE, round), looped: false };
+    /** Отбор подряд с места остановки: что набрали и докуда дошли. */
+    const collect = (list: Product[], from: number, strict: boolean) => {
+      const found: Product[] = [];
+      let i = from;
+      for (; i < list.length && found.length < WINDOW; i++) {
+        const p = list[i];
+        if (banned.has(p.id)) continue;
+        if (strict && !passes(p, filters)) continue;
+        found.push(p);
+      }
+      return { found, next: i };
+    };
+
+    /**
+     * Порядок карточек фиксирован на круг: он зависит только от снапшота и
+     * зерна сессии.
+     *
+     * Раньше витрина сортировалась по вкусу целиком, а страница вырезалась из
+     * неё по смещению. Но вкус меняется с каждым свайпом, и список под
+     * смещением уезжал: часть карточек приезжала по второму разу, часть
+     * пропускалась навсегда. Клиент повторы отбрасывал, страница приходила
+     * пустой, и человек смотрел на «подбираем следующие карточки» столько,
+     * сколько нужно было запросов, чтобы случайно набрать непоказанное.
+     *
+     * Теперь смещение идёт по неизменному порядку, а вкус решает только то,
+     * какие карточки из очередного окна показать первыми.
+     */
+    // Круг текущий, а если он пройден до конца — следующий: каталог конечен,
+    // а лента не должна заканчиваться. Суффикс круга не даёт идентификаторам
+    // совпасть с уже показанными.
+    for (let r = round, from = offset, pass = 0; pass < 2; pass++, r += 1, from = 0) {
+      const ordered = shuffle(all, seed + r * 104729);
+      let { found, next } = collect(ordered, from, true);
+      // Под фильтры не подошло ничего: показываем витрину целиком, а не
+      // пустой экран. С поиском так делать нельзя — там это была бы подмена
+      // выдачи, — а фильтры человек видит и может снять.
+      if (!found.length) ({ found, next } = collect(ordered, from, false));
+      if (!found.length) continue;
+
+      // Вкус решает порядок внутри окна. Небольшой шум не даёт ленте застыть.
+      const rnd = mulberry32(seed + r * 104729 + from);
+      const best = hint
+        ? found
+            .map((p) => ({ p, s: score(p, hint, rnd) }))
+            .sort((a, b) => b.s - a.s)
+            .slice(0, PAGE)
+            .map((x) => x.p)
+        : found.slice(0, PAGE);
+
+      const products = r > 0 ? best.map((p) => ({ ...p, id: `${p.id}-r${r}` })) : best;
+      return { products, cursor: encodeCursor(next, r), looped: r !== round };
+    }
+
+    // Сюда попадаем, только если исключено вообще всё, что есть в каталоге.
+    return { products: [], cursor: encodeCursor(0, round), looped: false };
   },
 };

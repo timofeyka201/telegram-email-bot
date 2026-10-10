@@ -1,8 +1,17 @@
 /** Символы валют, которые встречаются у наших источников. */
-const SYMBOL: Record<string, string> = { CNY: "¥", USD: "$", EUR: "€", RUB: "₽" };
+const SYMBOL: Record<string, string> = { CNY: "¥", USD: "$", EUR: "€", GBP: "£", RUB: "₽" };
 
-/** Курс к рублю по умолчанию — пользователь правит его в корзине. */
-export const DEFAULT_RATES: Record<string, number> = { CNY: 12.4, USD: 88, EUR: 96, RUB: 1 };
+/**
+ * Курс к рублю на случай, когда настоящий ещё не приехал: при самом первом
+ * открытии приложения и когда Центробанк недоступен, а прошлого ответа на
+ * диске нет. Цена, посчитанная по нему, всё равно ближе к правде, чем «—».
+ */
+export const DEFAULT_RATES: Record<string, number> = { CNY: 12.4, USD: 88, EUR: 96, GBP: 96, RUB: 1 };
+
+/** Курс в подпись: 88.4567 читается хуже, чем 88,46. */
+export function formatRate(rate: number): string {
+  return rate.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 export function symbolOf(currency: string): string {
   return SYMBOL[currency] ?? currency + " ";

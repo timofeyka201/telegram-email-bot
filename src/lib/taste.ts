@@ -99,7 +99,8 @@ export function toHint(taste: Taste, excludeIds: string[], rates?: Record<string
     rates,
     categories: trim(taste.categories),
     brands: trim(taste.brands),
-    // Список отвергнутого не должен раздуваться бесконечно.
-    exclude: excludeIds.slice(0, 600),
+    // Список показанного не должен раздуваться бесконечно: это тело запроса,
+    // которое уходит с телефона на каждой подгрузке.
+    exclude: excludeIds.slice(0, 800),
   };
 }

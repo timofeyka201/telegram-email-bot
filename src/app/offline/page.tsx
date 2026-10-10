@@ -20,7 +20,7 @@ export default function OfflinePage() {
         <button
           type="button"
           onClick={() => window.location.reload()}
-          className="brand-gradient w-full rounded-2xl py-3.5 text-[15px] font-bold text-white"
+          className="brand-gradient w-full rounded-full py-3.5 text-[15px] font-bold"
         >
           Попробовать снова
         </button>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useStore, type SyncedProfile } from "./store";
+import { loadMyWishlist } from "./wish/client";
 
 /**
  * Синхронизация личных данных с сервером. Работает только при входе; гость
@@ -105,13 +106,20 @@ function merge(local: SyncedProfile, remote: SyncedProfile): SyncedProfile {
       reasons: weights(remote.taste?.reasons, local.taste?.reasons),
     },
     sizes: Object.keys(fresh.sizes ?? {}).length ? fresh.sizes : (stale.sizes ?? {}),
+    // Имя и телефон: поле за полем, иначе заполненное на одном устройстве
+    // затирается пустотой с другого.
+    person: {
+      firstName: fresh.person?.firstName || stale.person?.firstName || "",
+      lastName: fresh.person?.lastName || stale.person?.lastName || "",
+      phone: fresh.person?.phone || stale.person?.phone || "",
+    },
+    orders: byId(remote.orders ?? [], local.orders ?? []).slice(0, 60),
     stats: {
       ...fresh.stats,
       swipes: Math.max(local.stats?.swipes ?? 0, remote.stats?.swipes ?? 0),
       likes: Math.max(local.stats?.likes ?? 0, remote.stats?.likes ?? 0),
       bestStreak: Math.max(local.stats?.bestStreak ?? 0, remote.stats?.bestStreak ?? 0),
     },
-    rates: { ...(stale.rates ?? {}), ...(fresh.rates ?? {}) },
     tasted: (local.tasted ?? false) || (remote.tasted ?? false),
     updatedAt: Date.now(),
   };
@@ -129,11 +137,15 @@ export async function syncOnLogin(): Promise<"merged" | "pushed" | "none"> {
   if (remote === "error") return "none";
   if (!remote) {
     await push();
+    await loadMyWishlist();
     return "pushed";
   }
 
   state.importProfile(merge(state.exportProfile(), remote));
   await push();
+  // Вишлист, отложенный до входа, переезжает в аккаунт: иначе список желаний
+  // на сервере окажется пустым ровно у тех, кто уже начал им пользоваться.
+  await loadMyWishlist();
   return "merged";
 }
 

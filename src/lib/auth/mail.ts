@@ -87,15 +87,15 @@ const escape = (s: string) =>
 function layout(heading: string, lead: string, button: string, link: string, footer: string): string {
   const url = escape(link);
   return `<!doctype html>
-<html lang="ru"><body style="margin:0;padding:24px;background:#f5f4fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:20px;padding:32px;">
+<html lang="ru"><body style="margin:0;padding:24px;background:#eceef2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:24px;padding:32px;">
     <tr><td>
-      <div style="font-size:20px;font-weight:800;letter-spacing:-0.02em;color:#1b1a24;margin-bottom:20px;">Swiper</div>
-      <h1 style="margin:0 0 12px;font-size:22px;line-height:1.25;color:#1b1a24;">${escape(heading)}</h1>
-      <p style="margin:0 0 24px;font-size:15px;line-height:1.5;color:#5a5870;">${escape(lead)}</p>
-      <a href="${url}" style="display:inline-block;background:#6f4ef2;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:14px 28px;border-radius:14px;">${escape(button)}</a>
-      <p style="margin:24px 0 0;font-size:13px;line-height:1.5;color:#8b89a0;">Если кнопка не работает, откройте ссылку вручную:<br><a href="${url}" style="color:#6f4ef2;word-break:break-all;">${url}</a></p>
-      <p style="margin:20px 0 0;font-size:13px;line-height:1.5;color:#8b89a0;">${escape(footer)}</p>
+      <div style="font-size:20px;font-weight:800;letter-spacing:-0.02em;color:#15161a;margin-bottom:20px;">Swiper</div>
+      <h1 style="margin:0 0 12px;font-size:22px;line-height:1.25;color:#15161a;">${escape(heading)}</h1>
+      <p style="margin:0 0 24px;font-size:15px;line-height:1.5;color:#3a3d45;">${escape(lead)}</p>
+      <a href="${url}" style="display:inline-block;background:#ff5b2e;color:#15161a;text-decoration:none;font-weight:800;font-size:15px;padding:14px 28px;border-radius:999px;">${escape(button)}</a>
+      <p style="margin:24px 0 0;font-size:13px;line-height:1.5;color:#666b76;">Если кнопка не работает, откройте ссылку вручную:<br><a href="${url}" style="color:#c2431d;word-break:break-all;">${url}</a></p>
+      <p style="margin:20px 0 0;font-size:13px;line-height:1.5;color:#666b76;">${escape(footer)}</p>
     </td></tr>
   </table>
 </body></html>`;

@@ -1,23 +1,29 @@
-import { bhapiProvider } from "./bhapi";
 import { localProvider } from "./local";
-import { catalogProvider } from "./dummyjson";
 import { demoProvider } from "./demo";
-import { wbProvider } from "./wildberries";
 import type { Provider } from "./types";
 
 /**
- * Порядок важен: это же и цепочка запасных вариантов в /api/feed.
- * Первой идёт своя база — она не зависит от внешних API и не может отказать.
+ * Витрина стоит на снапшоте AliExpress: импортёр (scripts/build-catalog-ae.mjs)
+ * складывает товары на диск, а лента читает только его. Ни один свайп не стоит
+ * ни одного запроса к партнёрскому API.
+ *
+ * Прежние источники — 1688, Wildberries и открытый демонстрационный каталог —
+ * из реестра убраны: витрина у них разная по качеству и валютам, а партнёрская
+ * комиссия есть только у AliExpress. Код источников остался в репозитории,
+ * вернуть любой из них — одна строка здесь.
+ *
+ * Порядок важен: это же и цепочка запасных вариантов в /api/feed. Офлайн-
+ * подборка идёт последней — она не зависит ни от чего и не даёт ленте опустеть.
  */
-export const PROVIDERS: Provider[] = [localProvider, bhapiProvider, wbProvider, catalogProvider, demoProvider];
+export const PROVIDERS: Provider[] = [localProvider, demoProvider];
 
 export function getProvider(id?: string | null): Provider {
   return PROVIDERS.find((p) => p.id === id) ?? defaultProvider();
 }
 
-/** По умолчанию — своя база: маркетплейсы режут серверные запросы лимитами. */
+/** По умолчанию — снапшот AliExpress; пока его нет, офлайн-подборка. */
 export function defaultProvider(): Provider {
-  return localProvider.ready() ? localProvider : wbProvider;
+  return localProvider.ready() ? localProvider : demoProvider;
 }
 
 export function providerInfo() {

@@ -6,7 +6,7 @@ import { useHydrated, useStore } from "@/lib/store";
 
 /**
  * Держит связь с сервером: при запуске выясняет, кто вошёл, подтягивает
- * профиль и дальше отправляет изменения. Ничего не рисует.
+ * профиль и курс валют, дальше отправляет изменения. Ничего не рисует.
  */
 export default function SyncAgent() {
   const hydrated = useHydrated();
@@ -43,6 +43,24 @@ export default function SyncAgent() {
       alive = false;
     };
   }, [hydrated, setAccount]);
+
+  // Курс общий для всех и в аккаунте не нуждается, поэтому спрашиваем его
+  // отдельно и при каждом запуске: браузер всё равно ответит из своего кэша,
+  // пока полученному значению не исполнится полчаса.
+  useEffect(() => {
+    if (!hydrated) return;
+    let alive = true;
+    fetch("/api/rates")
+      .then((r) => r.json())
+      .then((d: { rates?: Record<string, number>; date?: string | null; source?: string }) => {
+        if (!alive || !d.rates || !Object.keys(d.rates).length) return;
+        useStore.getState().setRates(d.rates, { date: d.date ?? null, source: d.source ?? "ЦБ РФ" });
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [hydrated]);
 
   useEffect(() => {
     if (!account) return;

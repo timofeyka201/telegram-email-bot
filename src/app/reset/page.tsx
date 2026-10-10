@@ -117,7 +117,7 @@ export default function ResetPage() {
         <button
           type="submit"
           disabled={state === "busy"}
-          className="brand-gradient mt-1 rounded-2xl py-3.5 text-[15px] font-bold text-white disabled:opacity-50"
+          className="brand-gradient mt-1 rounded-full py-3.5 text-[15px] font-bold disabled:opacity-50"
         >
           {state === "busy" ? "Секунду…" : "Сохранить пароль"}
         </button>

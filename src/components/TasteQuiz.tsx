@@ -136,7 +136,7 @@ export default function TasteQuiz({
             type="button"
             onClick={() => setStep(1)}
             disabled={picked.length < MIN_PICKS}
-            className="brand-gradient flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-[16px] font-bold text-white disabled:opacity-40"
+            className="brand-gradient flex w-full items-center justify-center gap-2 rounded-full py-4 text-[16px] font-bold disabled:opacity-40"
           >
             {picked.length < MIN_PICKS ? `Выберите ещё ${MIN_PICKS - picked.length}` : "Дальше"}
             {picked.length >= MIN_PICKS && <IconArrowRight className="h-5 w-5" />}
@@ -146,7 +146,7 @@ export default function TasteQuiz({
             type="button"
             onClick={finish}
             disabled={!budget}
-            className="brand-gradient w-full rounded-2xl py-4 text-[16px] font-bold text-white disabled:opacity-40"
+            className="brand-gradient w-full rounded-full py-4 text-[16px] font-bold disabled:opacity-40"
           >
             Показать ленту
           </button>

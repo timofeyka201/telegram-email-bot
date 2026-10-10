@@ -26,7 +26,7 @@ export default function PriceDrops({ drops, onOpen }: { drops: PriceDrop[]; onOp
       className="mx-4 mt-3 overflow-hidden rounded-3xl bg-[var(--color-like-soft)]"
     >
       <div className="flex items-center gap-2.5 px-4 pt-3.5">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-like)] text-white">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-like)] on-accent">
           <IconPriceDown className="h-4.5 w-4.5" />
         </span>
         <div className="min-w-0 flex-1">

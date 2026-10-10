@@ -90,7 +90,7 @@ export default function VerifyPage() {
         type="button"
         onClick={() => void confirm()}
         disabled={state === "busy"}
-        className="brand-gradient w-full rounded-2xl py-3.5 text-[15px] font-bold text-white disabled:opacity-50"
+        className="brand-gradient w-full rounded-full py-3.5 text-[15px] font-bold disabled:opacity-50"
       >
         {state === "busy" ? "Секунду…" : "Подтвердить почту"}
       </button>

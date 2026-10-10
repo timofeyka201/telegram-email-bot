@@ -15,7 +15,8 @@ function imageDir(): string {
 
 /**
  * Отдаёт картинку, скачанную импортёром. Имя файла — хэш исходного адреса,
- * поэтому содержимое по нему никогда не меняется: кэшируем навсегда.
+ * поэтому содержимое по нему никогда не меняется: кэшируем навсегда. Суффикс
+ * «-t» в имени означает превью для ленты миниатюр.
  *
  * Если файла нет (диск чистили, картинку не успели скачать), перенаправляем на
  * первоисточник из манифеста — карточка останется с фотографией, просто
@@ -26,7 +27,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ file: s
 
   // Имя пришло из адресной строки: пускаем только то, что порождает импортёр,
   // иначе «../../etc/passwd» стал бы валидным запросом.
-  if (!/^[a-f0-9]{32}\.webp$/.test(file)) {
+  if (!/^[a-f0-9]{32}(-t)?\.webp$/.test(file)) {
     return new NextResponse("Неверное имя файла", { status: 400 });
   }
 
@@ -50,7 +51,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ file: s
 async function originalUrl(dir: string, file: string): Promise<string | null> {
   try {
     const manifest = JSON.parse(await readFile(join(dir, "manifest.json"), "utf8")) as Record<string, string>;
-    const url = manifest[file];
+    // Превью в манифесте нет: оно делается из уже скачанного снимка. Пока его
+    // не сделали, отдаём тот же первоисточник — лента превью будет тяжёлой,
+    // но целой.
+    const url = manifest[file.replace(/-t\.webp$/, ".webp")];
     return url && /^https?:\/\//.test(url) ? url : null;
   } catch {
     return null;
