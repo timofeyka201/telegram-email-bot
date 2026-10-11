@@ -122,8 +122,16 @@ export default function DeckPage() {
   useEffect(() => {
     fetch("/api/health")
       .then((r) => r.json())
-      .then((d: { facets?: Facets }) => {
+      .then((d: { facets?: Facets; catalog?: { total?: number } }) => {
         if (d.facets) setFacets(d.facets);
+        // Разовая уборка: в колоде могли остаться карточки офлайн-подборки —
+        // раньше ею подменялась выдача, когда по запросу ничего не нашлось,
+        // и приложение продолжало спрашивать карточки у неё. Витрина есть —
+        // пересобираем ленту из неё.
+        const { deck, query: q, startFeed } = useStore.getState();
+        if ((d.catalog?.total ?? 0) > 0 && deck.some((p) => p.id.startsWith("demo-"))) {
+          startFeed({ provider: null, query: q });
+        }
       })
       .catch(() => undefined);
   }, []);

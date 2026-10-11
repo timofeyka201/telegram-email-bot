@@ -34,10 +34,25 @@ export async function POST(req: NextRequest) {
 
   const query = (body.query || "").trim();
   const seed = Number.isFinite(body.seed) ? Number(body.seed) : 1;
-  const requested = body.provider ? getProvider(body.provider) : defaultProvider();
 
-  // Порядок попыток: запрошенный источник, затем остальные готовые.
-  const chain = [requested, ...PROVIDERS.filter((p) => p.id !== requested.id && p.ready())];
+  /*
+   * Настоящая витрина есть — значит подменять её нечем.
+   *
+   * Офлайн-подборка стоит в цепочке запасных и отвечала всякий раз, когда у
+   * снапшота по запросу было пусто: человек искал что-то, чего на AliExpress
+   * не нашлось, и получал двенадцать встроенных карточек со ссылками на 1688.
+   * Хуже того, приложение запоминало ответивший источник и продолжало
+   * спрашивать его дальше — витрина так и оставалась подборкой до сброса.
+   * Поэтому подборка участвует, только когда снапшота нет вовсе, и просьбу
+   * клиента взять её мы тоже не исполняем, если настоящая витрина готова.
+   */
+  const live = PROVIDERS.some((p) => !p.fallbackOnly && p.ready());
+  const usable = PROVIDERS.filter((p) => p.ready() && (!live || !p.fallbackOnly));
+  const asked = body.provider ? getProvider(body.provider) : defaultProvider();
+  const requested = usable.includes(asked) ? asked : (usable[0] ?? defaultProvider());
+
+  // Порядок попыток: запрошенный источник, затем остальные пригодные.
+  const chain = [requested, ...usable.filter((p) => p.id !== requested.id)];
   const problems: string[] = [];
   const startedAt = Date.now();
   /** Источник ответил, но по запросу у него пусто. */

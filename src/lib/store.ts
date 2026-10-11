@@ -424,6 +424,10 @@ export const useStore = create<State>()(
           index: 0,
           history: [],
           cursor: null,
+          // Источник сбрасываем вместе с курсором. Иначе разовый запасной
+          // вариант закреплялся навсегда: ответила офлайн-подборка — и
+          // приложение продолжало спрашивать карточки у неё.
+          provider: null,
           seed: Math.floor(Math.random() * 1e9),
           query: s.query,
         })),

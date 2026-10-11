@@ -15,6 +15,7 @@ export const demoProvider: Provider = {
   note: "12 карточек внутри приложения. Работает без сети.",
   needsToken: false,
   ready: () => true,
+  fallbackOnly: true,
 
   async page({ query, cursor, seed }: PageArgs): Promise<ProviderPage> {
     const { offset, round } = decodeCursor(cursor);
