@@ -1,17 +1,9 @@
 import { readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { NextResponse } from "next/server";
-import { catalogPath } from "@/lib/catalog";
+import { imageDir } from "@/lib/catalog";
 
 export const runtime = "nodejs";
-
-/** Где лежат скачанные картинки. По умолчанию — рядом со снапшотом каталога. */
-function imageDir(): string {
-  const configured = process.env.IMAGE_DIR?.trim();
-  if (configured) return configured;
-  const catalog = catalogPath();
-  return catalog ? join(dirname(catalog), "images") : "data/images";
-}
 
 /**
  * Отдаёт картинку, скачанную импортёром. Имя файла — хэш исходного адреса,

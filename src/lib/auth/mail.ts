@@ -1,4 +1,3 @@
-import { headers } from "next/headers";
 
 /**
  * Отправка писем через REST — по той же причине, что и Redis: на serverless
@@ -59,24 +58,6 @@ export async function sendMail(to: string, subject: string, html: string, text: 
   } catch (e) {
     return { delivered: false, reason: e instanceof Error ? e.message : "почтовый сервис недоступен" };
   }
-}
-
-/**
- * Адрес приложения для ссылок в письмах. Берём из настройки, иначе собираем из
- * заголовков запроса — за прокси Vercel там уже подставлен настоящий домен.
- */
-export async function appUrl(): Promise<string> {
-  const configured = clean(process.env.APP_URL) || clean(process.env.NEXT_PUBLIC_APP_URL);
-  if (configured) return configured.replace(/\/+$/, "");
-
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host");
-  if (host) {
-    const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-    return `${proto}://${host}`;
-  }
-  const vercel = clean(process.env.VERCEL_PROJECT_PRODUCTION_URL) || clean(process.env.VERCEL_URL);
-  return vercel ? `https://${vercel}` : "http://localhost:3000";
 }
 
 // ------------------------------------------------------------------ письма

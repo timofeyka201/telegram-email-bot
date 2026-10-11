@@ -15,6 +15,7 @@ import {
 } from "./Icons";
 import { categoryLabel } from "@/lib/categories";
 import SizeGuide from "./SizeGuide";
+import ShareButton from "./ShareButton";
 import SizeProfileSheet from "./SizeProfileSheet";
 import { shopUrl } from "@/lib/shop";
 import { toast } from "./Toast";
@@ -105,8 +106,9 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
         // которой видно, что это шторка поверх ленты, и по которой её закрывают.
         className="relative mt-[calc(env(safe-area-inset-top)+56px)] flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-[32px] bg-[var(--color-surface)]"
       >
-        <div className="relative flex shrink-0 items-center justify-end px-3 pb-1.5 pt-2">
+        <div className="relative flex shrink-0 items-center justify-end gap-2 px-3 pb-1.5 pt-2">
           <span className="absolute left-1/2 top-3 h-[5px] w-10 -translate-x-1/2 rounded-full bg-[var(--color-line)]" />
+          <ShareButton product={full} />
           <button
             type="button"
             onClick={onClose}

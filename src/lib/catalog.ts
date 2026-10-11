@@ -1,4 +1,5 @@
 import { readFileSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
 import bundled from "../../data/catalog.json";
 import type { Product } from "./types";
 
@@ -92,4 +93,29 @@ export function catalogCategories(): string[] {
   const { file } = load();
   if (file.categories?.length) return file.categories;
   return [...new Set(catalogProducts().map((p) => p.category).filter(Boolean) as string[])];
+}
+
+/** Где лежат скачанные импортёром картинки. По умолчанию — рядом со снапшотом. */
+export function imageDir(): string {
+  const configured = process.env.IMAGE_DIR?.trim();
+  if (configured) return configured;
+  const catalog = catalogPath();
+  return catalog ? join(dirname(catalog), "images") : "data/images";
+}
+
+/**
+ * Поиск товара по идентификатору из ссылки.
+ *
+ * Перебором ста тысяч карточек на каждый запрос обходиться нельзя: по ссылке
+ * на товар приходят из мессенджеров, и удачная ссылка — это как раз всплеск
+ * запросов. Поэтому держим указатель, который пересобирается только вместе
+ * со снапшотом.
+ */
+let index: { source: Product[]; byId: Map<string, Product> } | null = null;
+
+export function productById(id: string): Product | undefined {
+  const all = catalogProducts();
+  if (index?.source !== all) index = { source: all, byId: new Map(all.map((p) => [p.id, p])) };
+  // Суффикс круга («-r1») указывает на тот же товар.
+  return index.byId.get(id.replace(/-r\d+$/, ""));
 }

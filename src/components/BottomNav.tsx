@@ -21,11 +21,17 @@ const items = [
 
 export default function BottomNav() {
   const pathname = usePathname();
+  // Страница товара открывается по ссылке из переписки, часто человеком без
+  // приложения: меню с пустым избранным и пустой корзиной ему ничего не даёт,
+  // а в ленту со страницы ведут две кнопки.
+  const standalone = pathname.startsWith("/t/");
   const hydrated = useHydrated();
   const likes = useStore((s) => s.liked.length);
   const wishes = useStore((s) => s.wishTotal ?? s.wishlist.length);
   const cart = useStore((s) => s.cart.length);
   const counts: Record<string, number> = { "/likes": likes, "/wishlist": wishes, "/cart": cart };
+
+  if (standalone) return null;
 
   return (
     <nav className="safe-bottom sticky bottom-0 z-40 border-t border-[var(--color-line)] bg-[var(--color-surface)]">

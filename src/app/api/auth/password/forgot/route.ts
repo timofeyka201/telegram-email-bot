@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+import { appUrl } from "@/lib/app-url";
 import { authStore } from "@/lib/auth/store";
 import { clientKey, noteFailure, tooManyAttempts } from "@/lib/auth/session";
 import { normalizeEmail } from "@/lib/auth/password";
-import { appUrl, resetEmail, sendMail } from "@/lib/auth/mail";
+import { resetEmail, sendMail } from "@/lib/auth/mail";
 import { issueToken } from "@/lib/auth/tokens";
 
 export const runtime = "nodejs";

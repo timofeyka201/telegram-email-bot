@@ -8,7 +8,7 @@ import ProductSheet from "@/components/ProductSheet";
 import { IconCart, IconExternal, IconTrash } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { cartTotals, unitPrice, useHydrated, useStore } from "@/lib/store";
-import { shopUrl, shopUrlAbsolute } from "@/lib/shop";
+import { cardUrlAbsolute, shopUrl } from "@/lib/shop";
 import { formatNative, formatRate, formatRub, needsConversion, plural, rateFor, symbolOf, toRub } from "@/lib/money";
 import type { Product } from "@/lib/types";
 
@@ -38,7 +38,9 @@ export default function CartPage() {
 
   async function copyList() {
     const text = cart
-      .map((c) => `${c.qty} × ${c.product.title}\n${formatNative(unitPrice(c), c.product.currency)} / шт · ${shopUrlAbsolute(c.product)}`)
+      // Ссылки на свои карточки, а не прямые на магазин: список пересылают
+      // друзьям, и по прямой ссылке они уходят мимо витрины.
+      .map((c) => `${c.qty} × ${c.product.title}\n${formatNative(unitPrice(c), c.product.currency)} / шт · ${cardUrlAbsolute(c.product)}`)
       .join("\n\n");
     const tail = currencies.map((c) => formatNative(totals[c], c)).join(" + ");
     try {

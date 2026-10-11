@@ -19,3 +19,18 @@ export function shopUrlAbsolute(product: Pick<Product, "id" | "url" | "source">)
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   return `${origin}${path}`;
 }
+
+/**
+ * Ссылка на карточку товара у нас. Ею делятся с людьми: она открывается без
+ * приложения, показывает превью в мессенджере и ведёт в ленту, а дальше в
+ * магазин — уже по партнёрской ссылке.
+ */
+export function cardUrl(product: Pick<Product, "id">): string {
+  return `/t/${encodeURIComponent(product.id)}`;
+}
+
+/** То же с адресом сайта — для буфера обмена, писем и кнопки «поделиться». */
+export function cardUrlAbsolute(product: Pick<Product, "id">): string {
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  return `${origin}${cardUrl(product)}`;
+}
