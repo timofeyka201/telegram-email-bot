@@ -37,12 +37,23 @@ const DAILY_BUDGET = Number(args.budget ?? env.AE_DAILY_BUDGET ?? 2000);
 const PAGE = 100;
 /** Потолок каталога: упираемся не в запросы, а в диск под фотографии. */
 const MAX_PRODUCTS = Number(args.max ?? env.CATALOG_MAX ?? 60000);
-/** Сколько страниц подряд без новых карточек считать за «фид кончился». */
-const DRY_PAGES = Number(args.dry ?? 50);
 /** Пауза между запросами: спешить некуда, а 429 стоит дорого. */
 const DELAY = Number(args.delay ?? 250);
 /** Только российские продавцы, только зарубежные или все подряд. */
 const LOCALITY = String(args.locality || env.AE_LOCALITY || "all");
+/**
+ * Какую долю каталога разрешено занять одной категории.
+ *
+ * Обход шёл вглубь: категория выкачивалась до последней страницы, и только
+ * потом начиналась следующая. При потолке в сто тысяч это значит, что первые
+ * две-три категории съедали весь каталог, а до остальных дело не доходило
+ * никогда — витрина выглядела узкой при формально большом числе карточек.
+ */
+const QUOTA_SHARE = Number(args.quota ?? env.CATALOG_CATEGORY_SHARE ?? 0.06);
+/** Сколько страниц брать у категории за один заход по кругу. */
+const LAP_PAGES = Number(args.lap ?? 2);
+/** Склейка одинаковых товаров у разных продавцов. */
+const DEDUP = String(args.dedup ?? env.CATALOG_DEDUP ?? "1") !== "0";
 
 /**
  * Какие фиды брать. Без флага — все, что отдала площадка; с флагом
@@ -76,13 +87,12 @@ function readLedger() {
   } catch {
     // первого запуска ещё не было
   }
-  // Счётчик запросов живёт сутками, место в обходе — нет.
-  const where = {
-    feed: stored?.feed ?? 0,
-    cursor: stored?.cursor ?? "",
-    feedId: stored?.feedId ?? null,
-    categoryId: stored?.categoryId ?? null,
-  };
+  /*
+   * Счётчик запросов живёт сутками, место в обходе — нет. Мест теперь много:
+   * у каждой пары «фид + категория» свой курсор, иначе круговой обход после
+   * перезапуска начинался бы сначала везде.
+   */
+  const where = { spots: stored?.spots ?? {}, lap: stored?.lap ?? 0 };
   return stored?.day === today() ? { ...stored, ...where } : { day: today(), used: 0, ...where };
 }
 
@@ -218,6 +228,40 @@ function toProduct(row, feedTitle) {
 
 /** Карточка без картинки или цены в свайп-ленте бесполезна. */
 const usable = (p) => p && p.images.length > 0 && p.title && p.price !== undefined;
+
+/**
+ * Отпечаток товара: набор значимых слов названия.
+ *
+ * Одно и то же платье выкладывают полсотни продавцов, слово в слово копируя
+ * название друг у друга и переставляя пару слов местами. На свайпах такая
+ * витрина читается как «тут ничего нет»: человек видит один товар подряд
+ * десять раз. Сравнивать по идентификатору бесполезно — он у каждой
+ * перепродажи свой.
+ *
+ * Слова сортируются, поэтому перестановка не мешает; берём первые
+ * двенадцать значимых — остальное у таких названий чистый мусор из
+ * ключевых слов.
+ */
+function fingerprint(p) {
+  const words = String(p.title)
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[^a-zа-я0-9]+/gi, " ")
+    .split(" ")
+    // Числа оставляем любой длины: «iPhone 15» и «iPhone 14» — разные
+    // товары, и потерять «15» значит склеить их в один.
+    .filter((w) => w.length >= 3 || /\d/.test(w))
+    .slice(0, 12)
+    .sort();
+  return words.length >= 3 ? words.join(" ") : null;
+}
+
+/** Из двух одинаковых оставляем ту, что убедительнее выглядит в ленте. */
+function better(a, b) {
+  if ((a.soldCount ?? 0) !== (b.soldCount ?? 0)) return (a.soldCount ?? 0) > (b.soldCount ?? 0) ? a : b;
+  if ((a.rating ?? 0) !== (b.rating ?? 0)) return (a.rating ?? 0) > (b.rating ?? 0) ? a : b;
+  return (a.price ?? Infinity) <= (b.price ?? Infinity) ? a : b;
+}
 
 // ------------------------------------------------------------- снапшот
 function readSnapshot() {
@@ -475,99 +519,188 @@ async function main() {
   const before = known.size;
   let added = 0;
   let skipped = 0;
-  let dry = 0;
+  let twins = 0;
   const dumped = [];
 
-  // Продолжаем с того места, где остановились в прошлый раз: фид, категория
-  // и страница внутри неё.
-  let feedIndex = feeds.findIndex((f) => f.id === ledger.feedId);
-  if (feedIndex < 0) feedIndex = Math.min(ledger.feed ?? 0, feeds.length - 1);
-  const resuming = feeds[feedIndex]?.id === ledger.feedId;
-  let cursor = resuming ? (ledger.cursor ?? "") : "";
-
-  /**
-   * Категории текущего фида. Пустой список означает, что фид обходится
-   * целиком — у некоторых фидов («Топ продаж») категорий может не быть.
+  /*
+   * Указатель «отпечаток → идентификатор»: по нему новая карточка узнаётся
+   * как копия уже имеющейся. Строится и по старому снапшоту тоже, поэтому
+   * первый же прогон после обновления подчистит накопленные дубли.
    */
-  let categories = await listCategories(feeds[feedIndex].id);
-  let categoryIndex = resuming ? categories.findIndex((c) => c.id === ledger.categoryId) : -1;
-  if (categoryIndex < 0) categoryIndex = 0;
-  if (categories.length) {
-    console.log(`Фид ${feeds[feedIndex].id}: категорий ${categories.length}`);
-  }
-
-  /** Переход к следующей категории, а когда они кончились — к следующему фиду. */
-  async function advance() {
-    cursor = "";
-    if (categoryIndex + 1 < categories.length) {
-      categoryIndex += 1;
-      return true;
-    }
-    feedIndex = (feedIndex + 1) % feeds.length;
-    categoryIndex = 0;
-    categories = await listCategories(feeds[feedIndex].id);
-    if (categories.length) console.log(`Фид ${feeds[feedIndex].id}: категорий ${categories.length}`);
-    return feeds.length > 1;
-  }
-
-  while (spent.calls + 1 <= left) {
-    if (known.size >= MAX_PRODUCTS) {
-      console.log(`Каталог добрал до потолка (${MAX_PRODUCTS}) — останавливаемся.`);
-      break;
-    }
-    if (dry >= DRY_PAGES) {
-      console.log(`Страниц подряд без новых карточек: ${dry} — фиды обойдены, остаток бюджета не тратим.`);
-      break;
-    }
-
-    const feed = feeds[feedIndex];
-    const category = categories[categoryIndex];
-    let page;
-    try {
-      page = await productsPage(feed.id, cursor, category?.id);
-    } catch (e) {
-      if (e instanceof AeError && e.status === 429) {
-        console.log("Платформа просит притормозить — на сегодня заканчиваем.");
-        break;
-      }
-      throw e;
-    }
-
-    const addedBefore = added;
-    for (const raw of page.items) {
-      if (dumped.length < 20 && DUMP) dumped.push(raw);
-      // Категория берётся из обхода: в самом товаре её нет. Без категорий у
-      // фида остаётся его собственное название.
-      const product = toProduct(raw, category?.title ?? feed.title);
-      if (!usable(product)) {
-        skipped += 1;
+  const byPrint = new Map();
+  if (DEDUP) {
+    for (const p of known.values()) {
+      const print = fingerprint(p);
+      if (!print) continue;
+      const rival = byPrint.get(print);
+      if (!rival) {
+        byPrint.set(print, p.id);
         continue;
       }
-      // Известный товар обновляем — цены на AliExpress живут своей жизнью, —
-      // но не дублируем. Один и тот же товар попадается в нескольких фидах
-      // (скажем, в «Электронике» и в «Топе продаж»), и категория достаётся
-      // ему от того обхода, который встретился первым.
-      if (!known.has(product.id)) {
-        if (known.size >= MAX_PRODUCTS) continue;
-        added += 1;
-      }
-      known.set(product.id, product);
+      const keep = better(known.get(rival), p);
+      const drop = keep.id === rival ? p.id : rival;
+      known.delete(drop);
+      byPrint.set(print, keep.id);
+      twins += 1;
     }
-    dry = added > addedBefore ? 0 : dry + 1;
-    console.log(
-      `  фид ${feed.id}${category ? ` / ${category.title}` : ""}: получено ${page.items.length}, в каталоге ${known.size}`,
-    );
+    if (twins) console.log(`В снапшоте склеено дублей: ${twins}`);
+  }
 
-    cursor = page.next;
-    // Категория кончилась: курсор пуст или страница пришла пустой.
-    if (!cursor || !page.items.length) {
-      const more = await advance();
-      if (!more) {
-        console.log("Все фиды и категории пройдены до конца.");
-        break;
-      }
+  /**
+   * Места обхода: каждая пара «фид + категория» — отдельная точка со своим
+   * курсором и своей квотой. Список категорий спрашивается один раз за
+   * прогон, это по запросу на фид.
+   */
+  const spots = [];
+  for (const feed of feeds) {
+    const categories = await listCategories(feed.id);
+    if (categories.length) {
+      console.log(`Фид ${feed.id}: категорий ${categories.length}`);
+      for (const c of categories) spots.push({ key: `${feed.id}:${c.id}`, feed, category: c });
+    } else {
+      spots.push({ key: `${feed.id}:*`, feed, category: null });
     }
-    await pause(DELAY);
+  }
+  console.log(`Точек обхода: ${spots.length}`);
+
+  /*
+   * Квота на категорию: чтобы одна не заняла собой весь каталог. Но когда
+   * категорий мало, доля в шесть процентов означала бы, что каталог не
+   * наберётся никогда, — поэтому не меньше честной доли с запасом в
+   * полтора раза. Считается страницами по сотне, так что фактический
+   * перебор возможен на страницу-другую: на тысячах это доли процента.
+   */
+  const fair = Math.ceil((MAX_PRODUCTS * 1.5) / spots.length);
+  const perSpot = Math.max(PAGE, Math.round(MAX_PRODUCTS * QUOTA_SHARE), fair);
+  console.log(`Потолок на категорию: ${perSpot} карточек`);
+
+  for (const spot of spots) {
+    const saved = ledger.spots[spot.key] ?? {};
+    spot.cursor = saved.cursor ?? "";
+    spot.got = saved.got ?? 0;
+    spot.done = !!saved.done;
+  }
+
+  /**
+   * Обход по кругу: от каждой точки берём по паре страниц и идём дальше.
+   * Круг без единой новой карточки означает, что брать больше нечего.
+   */
+  let lap = 0;
+  let stop = false;
+  while (!stop) {
+    const live = spots.filter((s) => !s.done && !s.quiet && s.got < perSpot);
+    if (!live.length) {
+      console.log("Все категории дошли до конца или до своей квоты.");
+      break;
+    }
+
+    lap += 1;
+    const addedAtLapStart = added;
+
+    for (const spot of live) {
+      const hadBefore = added;
+      for (let page = 0; page < LAP_PAGES; page++) {
+        if (spent.calls + 1 > left) {
+          console.log("Бюджет на сегодня закончился — продолжим завтра с этого же места.");
+          stop = true;
+          break;
+        }
+        if (known.size >= MAX_PRODUCTS) {
+          console.log(`Каталог добрал до потолка (${MAX_PRODUCTS}) — останавливаемся.`);
+          stop = true;
+          break;
+        }
+        if (spot.done || spot.got >= perSpot) break;
+
+        let got;
+        try {
+          got = await productsPage(spot.feed.id, spot.cursor, spot.category?.id);
+        } catch (e) {
+          if (e instanceof AeError && e.status === 429) {
+            console.log("Платформа просит притормозить — на сегодня заканчиваем.");
+            stop = true;
+            break;
+          }
+          throw e;
+        }
+
+        let fresh = 0;
+        for (const raw of got.items) {
+          if (dumped.length < 20 && DUMP) dumped.push(raw);
+          // Категория берётся из обхода: в самом товаре её нет. Без категорий
+          // у фида остаётся его собственное название.
+          const product = toProduct(raw, spot.category?.title ?? spot.feed.title);
+          if (!usable(product)) {
+            skipped += 1;
+            continue;
+          }
+
+          const print = DEDUP ? fingerprint(product) : null;
+          const rivalId = print ? byPrint.get(print) : undefined;
+          if (rivalId && rivalId !== product.id) {
+            // Тот же товар у другого продавца: оставляем убедительнейший,
+            // второй не показываем вовсе.
+            const rival = known.get(rivalId);
+            if (rival) {
+              const keep = better(rival, product);
+              if (keep.id !== rivalId) {
+                known.delete(rivalId);
+                known.set(product.id, product);
+                byPrint.set(print, product.id);
+              }
+              twins += 1;
+              continue;
+            }
+          }
+
+          if (!known.has(product.id)) {
+            if (known.size >= MAX_PRODUCTS) continue;
+            added += 1;
+            fresh += 1;
+            spot.got += 1;
+          }
+          known.set(product.id, product);
+          if (print) byPrint.set(print, known.get(product.id).id);
+        }
+
+        spot.cursor = got.next;
+        // Курсор пуст или страница пришла пустой — категория кончилась.
+        if (!spot.cursor || !got.items.length) {
+          spot.done = true;
+          break;
+        }
+        if (!fresh) {
+          // Страница целиком из уже известного: курсор сохраняем — вдруг
+          // дальше есть новое, — но на этом круге точку оставляем.
+          break;
+        }
+        await pause(DELAY);
+      }
+
+      /*
+       * Категория, которая три круга подряд не дала ничего нового, на
+       * сегодня откладывается. Это про прогоны после смены обхода: прежний
+       * импортёр вычерпывал категории вглубь, и перечитывать их страницы по
+       * второму разу — значит тратить дневной бюджет впустую, пока соседние
+       * категории стоят нетронутыми. Завтра к ней вернёмся: в журнале она
+       * остаётся живой.
+       */
+      spot.idle = added > hadBefore ? 0 : (spot.idle ?? 0) + 1;
+      if (spot.idle >= 3) {
+        spot.quiet = true;
+        console.log(`  ${spot.feed.id}${spot.category ? ` / ${spot.category.title}` : ""}: нового нет, откладываю до завтра`);
+      }
+      if (stop) break;
+    }
+
+    console.log(
+      `Круг ${lap}: добавлено ${added - addedAtLapStart}, в каталоге ${known.size}` +
+        (twins ? `, склеено дублей ${twins}` : ""),
+    );
+    if (added === addedAtLapStart) {
+      console.log("Круг не дал ни одной новой карточки — на сегодня всё.");
+      break;
+    }
   }
 
   const products = [...known.values()];
@@ -581,10 +714,8 @@ async function main() {
   writeLedger({
     day: ledger.day,
     used: ledger.used + spent.calls,
-    feed: feedIndex,
-    feedId: feeds[feedIndex]?.id ?? null,
-    categoryId: categories[categoryIndex]?.id ?? null,
-    cursor,
+    lap,
+    spots: Object.fromEntries(spots.map((s) => [s.key, { cursor: s.cursor, got: s.got, done: s.done }])),
   });
 
   if (DUMP && dumped.length) {
@@ -595,6 +726,7 @@ async function main() {
   console.log(
     `Готово: было ${before}, стало ${products.length} (+${added}). ` +
       (skipped ? `Без картинки или цены пропущено ${skipped}. ` : "") +
+      (twins ? `Склеено дублей: ${twins}. ` : "") +
       `Потрачено запросов: ${spent.calls}, за сутки ${ledger.used + spent.calls} из ${DAILY_BUDGET}.`,
   );
   console.log(`Снапшот: ${OUT}`);
