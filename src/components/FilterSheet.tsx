@@ -73,7 +73,7 @@ export default function FilterSheet({ open, onClose, categories, maxPrice, curre
       }
     >
       <p className="mb-2 mt-1 text-[12px] font-bold uppercase tracking-wider text-[var(--color-muted)]">Поиск</p>
-      <div className="soft-shadow flex items-center gap-2 rounded-2xl bg-[var(--color-surface)] px-3.5 py-1">
+      <div className="field soft-shadow flex items-center gap-2 rounded-2xl bg-[var(--color-surface)] px-3.5">
         <IconSearch className="h-4.5 w-4.5 shrink-0 text-[var(--color-muted)]" />
         <input
           value={text}
@@ -82,10 +82,15 @@ export default function FilterSheet({ open, onClose, categories, maxPrice, curre
             if (e.key === "Enter") apply();
           }}
           placeholder="Название, бренд или категория"
-          className="w-full bg-transparent py-2.5 text-[15px] outline-none placeholder:text-[var(--color-muted)]"
+          className="h-12 w-full bg-transparent text-[15px] outline-none placeholder:text-[var(--color-muted)]"
         />
         {text && (
-          <button type="button" onClick={() => setText("")} aria-label="Очистить" className="shrink-0 text-[var(--color-muted)]">
+          <button
+            type="button"
+            onClick={() => setText("")}
+            aria-label="Очистить"
+            className="tap -mr-2.5 flex shrink-0 items-center justify-center text-[var(--color-muted)]"
+          >
             <IconX className="h-4 w-4" />
           </button>
         )}
@@ -101,7 +106,7 @@ export default function FilterSheet({ open, onClose, categories, maxPrice, curre
               type="button"
               onClick={() => toggle(c)}
               aria-pressed={on}
-              className={`flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[13px] font-medium transition-colors ${
+              className={`chip gap-1.5 rounded-full border px-4 text-[13px] font-medium transition-colors ${
                 on
                   ? "border-[var(--color-brand)] bg-[var(--color-brand-soft)] text-[var(--color-brand)]"
                   : "border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-ink-soft)]"
@@ -122,7 +127,7 @@ export default function FilterSheet({ open, onClose, categories, maxPrice, curre
             <button
               type="button"
               onClick={() => setDraft((d) => ({ ...d, maxPrice: undefined }))}
-              className="text-[13px] font-semibold text-[var(--color-brand)]"
+              className="-mr-2 -my-2 rounded-xl px-2 py-2 text-[13px] font-semibold text-[var(--color-brand)]"
             >
               Любая
             </button>
@@ -136,16 +141,16 @@ export default function FilterSheet({ open, onClose, categories, maxPrice, curre
           value={price}
           onChange={(e) => setDraft((d) => ({ ...d, maxPrice: Number(e.target.value) }))}
           aria-label="Максимальная цена"
-          className="mt-3 w-full accent-[var(--color-brand)]"
+          className="mt-2 h-11 w-full accent-[var(--color-brand)]"
         />
       </div>
 
-      <label className="soft-shadow mt-3 flex cursor-pointer items-center gap-3 rounded-2xl bg-[var(--color-surface)] px-4 py-3.5">
+      <label className="soft-shadow mt-3 flex min-h-[56px] cursor-pointer items-center gap-3 rounded-2xl bg-[var(--color-surface)] px-4 py-3">
         <input
           type="checkbox"
           checked={!!draft.onlyDiscount}
           onChange={(e) => setDraft((d) => ({ ...d, onlyDiscount: e.target.checked }))}
-          className="h-5 w-5 accent-[var(--color-brand)]"
+          className="h-[22px] w-[22px] shrink-0 accent-[var(--color-brand)]"
         />
         <span>
           <span className="block text-[15px] font-semibold leading-tight">Только со скидкой</span>

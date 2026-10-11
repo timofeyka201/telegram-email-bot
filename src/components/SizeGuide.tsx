@@ -33,7 +33,7 @@ export default function SizeGuide({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center gap-2 text-left"
+        className="flex min-h-[48px] w-full items-center gap-2 text-left"
       >
         <span className="flex-1">
           <span className="block text-[15px] font-bold">Гайд по размерам · {table.title}</span>

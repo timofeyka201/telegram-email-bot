@@ -37,7 +37,7 @@ export default function TopBar({
 
   return (
     <header className="safe-top sticky top-0 z-30 min-w-0 bg-[var(--color-bg)]/92 backdrop-blur-md">
-      <div className="flex items-center gap-2 px-4 pb-1.5 pt-2.5">
+      <div className="flex items-center gap-2 px-4 pb-2.5 pt-2.5">
         {/* Поле только по виду: ввод живёт в шторке, где рядом цена и скидки. */}
         <button
           type="button"
@@ -79,7 +79,7 @@ export default function TopBar({
 
       {/* Быстрые фильтры на виду: один тап вместо похода в меню */}
       {categories.length > 0 && (
-        <div className="no-scrollbar flex w-full min-w-0 items-center gap-1.5 overflow-x-auto px-4 pb-2">
+        <div className="no-scrollbar flex w-full min-w-0 items-center gap-2.5 overflow-x-auto px-4 pb-2.5">
           {categories.slice(0, 14).map((c) => {
             const on = active.includes(c);
             return (
@@ -88,7 +88,7 @@ export default function TopBar({
                 type="button"
                 onClick={() => onToggleCategory(c)}
                 aria-pressed={on}
-                className={`shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition-colors ${
+                className={`chip shrink-0 whitespace-nowrap rounded-full px-4 text-[13px] font-semibold transition-colors ${
                   on
                     ? "bg-[var(--color-ink)] text-[var(--color-surface)]"
                     : "bg-[var(--color-surface)] text-[var(--color-ink-soft)] soft-shadow active:bg-[var(--color-surface-2)]"

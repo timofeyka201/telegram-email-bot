@@ -197,7 +197,7 @@ export default function AuthSheet({ open, onClose }: { open: boolean; onClose: (
             setError(null);
             setMode("login");
           }}
-          className="mt-3 w-full py-2 text-[13px] font-semibold text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+          className="mt-3 min-h-[44px] w-full text-[13px] font-semibold text-[var(--color-muted)] hover:text-[var(--color-ink)]"
         >
           Указать другой адрес
         </button>
@@ -239,7 +239,7 @@ export default function AuthSheet({ open, onClose }: { open: boolean; onClose: (
               setNote(null);
             }}
             aria-pressed={mode === id}
-            className={`flex-1 rounded-full py-2 text-[13px] font-bold transition-colors ${
+            className={`chip flex-1 justify-center rounded-full text-[13px] font-bold transition-colors ${
               mode === id ? "bg-[var(--color-surface)] text-[var(--color-ink)] soft-shadow" : "text-[var(--color-muted)]"
             }`}
             >
@@ -257,19 +257,19 @@ export default function AuthSheet({ open, onClose }: { open: boolean; onClose: (
         className="flex flex-col gap-2.5"
       >
         {mode === "register" && (
-          <label className="soft-shadow flex flex-col rounded-2xl bg-[var(--color-surface)] px-4 py-2.5">
+          <label className="soft-shadow flex flex-col justify-center rounded-2xl bg-[var(--color-surface)] px-4 py-2.5 min-h-[60px]">
             <span className="text-[12px] font-semibold text-[var(--color-muted)]">Как к вам обращаться</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoComplete="given-name"
               placeholder="Необязательно"
-              className="bg-transparent py-1 text-[15px] outline-none placeholder:text-[var(--color-muted)]"
+              className="bg-transparent py-1.5 text-[15px] outline-none placeholder:text-[var(--color-muted)]"
             />
           </label>
         )}
 
-        <label className="soft-shadow flex flex-col rounded-2xl bg-[var(--color-surface)] px-4 py-2.5">
+        <label className="soft-shadow flex flex-col justify-center rounded-2xl bg-[var(--color-surface)] px-4 py-2.5 min-h-[60px]">
           <span className="text-[12px] font-semibold text-[var(--color-muted)]">Почта</span>
           <input
             type="email"
@@ -279,12 +279,12 @@ export default function AuthSheet({ open, onClose }: { open: boolean; onClose: (
             autoComplete="email"
             inputMode="email"
             placeholder="you@example.com"
-            className="bg-transparent py-1 text-[15px] outline-none placeholder:text-[var(--color-muted)]"
+            className="bg-transparent py-1.5 text-[15px] outline-none placeholder:text-[var(--color-muted)]"
           />
         </label>
 
         {mode !== "forgot" && (
-          <label className="soft-shadow flex flex-col rounded-2xl bg-[var(--color-surface)] px-4 py-2.5">
+          <label className="soft-shadow flex flex-col justify-center rounded-2xl bg-[var(--color-surface)] px-4 py-2.5 min-h-[60px]">
             <span className="text-[12px] font-semibold text-[var(--color-muted)]">
               Пароль{mode === "register" ? ` · ${PASSWORD_RULE}` : ""}
             </span>
@@ -295,13 +295,13 @@ export default function AuthSheet({ open, onClose }: { open: boolean; onClose: (
               onChange={(e) => setPassword(e.target.value)}
               autoComplete={mode === "register" ? "new-password" : "current-password"}
               minLength={mode === "register" ? 8 : undefined}
-              className="bg-transparent py-1 text-[15px] outline-none"
+              className="bg-transparent py-1.5 text-[15px] outline-none"
             />
           </label>
         )}
 
         {mode === "register" && (
-          <label className="soft-shadow flex flex-col rounded-2xl bg-[var(--color-surface)] px-4 py-2.5">
+          <label className="soft-shadow flex flex-col justify-center rounded-2xl bg-[var(--color-surface)] px-4 py-2.5 min-h-[60px]">
             <span className="text-[12px] font-semibold text-[var(--color-muted)]">Пароль ещё раз</span>
             <input
               type="password"
@@ -309,7 +309,7 @@ export default function AuthSheet({ open, onClose }: { open: boolean; onClose: (
               value={repeat}
               onChange={(e) => setRepeat(e.target.value)}
               autoComplete="new-password"
-              className="bg-transparent py-1 text-[15px] outline-none"
+              className="bg-transparent py-1.5 text-[15px] outline-none"
             />
             {repeat && password !== repeat && (
               <span className="pb-0.5 text-[12px] text-[var(--color-nope)]">Пароли не совпадают</span>

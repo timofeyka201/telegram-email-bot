@@ -42,7 +42,7 @@ export default function SizeProfileSheet({ open, onClose }: { open: boolean; onC
           <button
             type="button"
             onClick={() => setDraft({})}
-            className="rounded-2xl bg-[var(--color-surface-2)] px-5 py-3.5 text-[15px] font-semibold text-[var(--color-ink-soft)]"
+            className="min-h-[48px] rounded-2xl bg-[var(--color-surface-2)] px-5 text-[15px] font-semibold text-[var(--color-ink-soft)]"
           >
             Очистить
           </button>
@@ -74,7 +74,7 @@ export default function SizeProfileSheet({ open, onClose }: { open: boolean; onC
               placeholder={hint}
               value={(draft[key] as number | undefined) ?? ""}
               onChange={(e) => setNumber(key, e.target.value)}
-              className="tnum w-24 rounded-xl bg-[var(--color-surface-2)] px-3 py-2 text-right text-[15px] outline-none"
+              className="tnum h-11 w-24 rounded-xl bg-[var(--color-surface-2)] px-3 text-right text-[15px] outline-none"
             />
             <span className="w-6 text-[13px] text-[var(--color-muted)]">{unit}</span>
           </label>
@@ -90,7 +90,7 @@ export default function SizeProfileSheet({ open, onClose }: { open: boolean; onC
           <select
             value={draft.clothing ?? ""}
             onChange={(e) => setDraft((d) => ({ ...d, clothing: e.target.value || undefined }))}
-            className="w-28 rounded-xl bg-[var(--color-surface-2)] px-3 py-2 text-[15px] outline-none"
+            className="h-11 w-28 rounded-xl bg-[var(--color-surface-2)] px-3 text-[15px] outline-none"
           >
             <option value="">—</option>
             {SIZE_TABLES[0].rows.map((r) => (
@@ -105,7 +105,7 @@ export default function SizeProfileSheet({ open, onClose }: { open: boolean; onC
           <select
             value={draft.shoes ?? ""}
             onChange={(e) => setDraft((d) => ({ ...d, shoes: e.target.value || undefined }))}
-            className="w-28 rounded-xl bg-[var(--color-surface-2)] px-3 py-2 text-[15px] outline-none"
+            className="h-11 w-28 rounded-xl bg-[var(--color-surface-2)] px-3 text-[15px] outline-none"
           >
             <option value="">—</option>
             {SIZE_TABLES[1].rows.map((r) => (

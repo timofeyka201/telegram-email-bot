@@ -61,9 +61,9 @@ export default function Sheet({
                 type="button"
                 onClick={onClose}
                 aria-label="Закрыть"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-surface)] text-[var(--color-muted)] soft-shadow"
+                className="tap -mr-1.5 flex items-center justify-center rounded-full bg-[var(--color-surface)] text-[var(--color-muted)] soft-shadow"
               >
-                <IconX className="h-4 w-4" />
+                <IconX className="h-[18px] w-[18px]" />
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">{children}</div>

@@ -68,9 +68,9 @@ export default function WishlistPage() {
               type="button"
               onClick={() => setSettingsOpen(true)}
               aria-label="Настройки списка"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-[var(--color-muted)]"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-[var(--color-muted)]"
             >
-              <IconGear className="h-4 w-4" />
+              <IconGear className="h-[18px] w-[18px]" />
             </button>
           )}
         </div>
@@ -88,7 +88,7 @@ export default function WishlistPage() {
                 type="button"
                 onClick={() => setTab(id)}
                 aria-pressed={tab === id}
-                className={`flex items-center justify-center gap-1.5 rounded-full py-2 text-[14px] transition-colors ${
+                className={`flex min-h-[42px] items-center justify-center gap-1.5 rounded-full text-[14px] transition-colors ${
                   tab === id
                     ? "bg-[var(--color-surface)] font-bold text-[var(--color-ink)] soft-shadow"
                     : "font-semibold text-[var(--color-muted)]"
@@ -225,12 +225,12 @@ function FindByCode() {
           autoCapitalize="characters"
           autoCorrect="off"
           spellCheck={false}
-          className="w-full min-w-0 rounded-2xl border border-[var(--color-line)] bg-[var(--color-bg)] px-3.5 py-2.5 text-[15px] uppercase outline-none placeholder:normal-case focus:border-[var(--color-brand)]"
+          className="field w-full min-w-0 rounded-2xl border border-[var(--color-line)] bg-[var(--color-bg)] px-3.5 text-[15px] uppercase outline-none placeholder:normal-case focus:border-[var(--color-brand)]"
         />
         <button
           type="submit"
           aria-label="Найти"
-          className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-2xl bg-[var(--color-brand)] on-accent"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--color-brand)] on-accent"
         >
           <IconSearch className="h-5 w-5" />
         </button>
@@ -340,9 +340,9 @@ function WishTile({ item, onOpen, onRemove }: { item: OwnerItem; onOpen: () => v
         type="button"
         onClick={onRemove}
         aria-label="Убрать из вишлиста"
-        className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-surface)]/90 text-[var(--color-muted)] backdrop-blur soft-shadow"
+        className="absolute right-1.5 top-1.5 flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-surface)]/90 text-[var(--color-muted)] backdrop-blur soft-shadow"
       >
-        <IconTrash className="h-4 w-4" />
+        <IconTrash className="h-[18px] w-[18px]" />
       </button>
 
       <p className="line-clamp-2 text-[14px] font-semibold leading-[1.3]">{item.title}</p>
@@ -391,7 +391,7 @@ function SettingsSheetInner({
   }, [open, view]);
 
   const field =
-    "w-full rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] px-3.5 py-2.5 text-[15px] outline-none focus:border-[var(--color-brand)]";
+    "field w-full rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] px-3.5 text-[15px] outline-none focus:border-[var(--color-brand)]";
 
   return (
     <Sheet

@@ -58,7 +58,7 @@ export default function InstallBlock() {
               const outcome = await install();
               if (outcome === "accepted") toast("Приложение установлено", "like");
             }}
-            className="brand-gradient mt-3 w-full rounded-full py-2.5 text-[14px] font-bold"
+            className="brand-gradient mt-3 min-h-[48px] w-full rounded-full text-[14px] font-bold"
           >
             Установить
           </button>
@@ -77,7 +77,7 @@ export default function InstallBlock() {
             <button
               type="button"
               onClick={copyLink}
-              className="brand-gradient mt-3 w-full rounded-full py-2.5 text-[14px] font-bold"
+              className="brand-gradient mt-3 min-h-[48px] w-full rounded-full text-[14px] font-bold"
             >
               Скопировать ссылку
             </button>
@@ -104,7 +104,7 @@ export default function InstallBlock() {
               type="button"
               onClick={() => setHowTo((v) => !v)}
               aria-expanded={howTo}
-              className="mt-3 w-full rounded-xl bg-[var(--color-surface-2)] py-2.5 text-[14px] font-bold text-[var(--color-ink)]"
+              className="mt-3 min-h-[48px] w-full rounded-xl bg-[var(--color-surface-2)] text-[14px] font-bold text-[var(--color-ink)]"
             >
               {howTo ? "Понятно" : "Как это сделать"}
             </button>
@@ -138,7 +138,7 @@ export default function InstallBlock() {
               type="button"
               onClick={() => setHowTo((v) => !v)}
               aria-expanded={howTo}
-              className="mt-3 w-full rounded-xl bg-[var(--color-surface-2)] py-2.5 text-[14px] font-bold text-[var(--color-ink)]"
+              className="mt-3 min-h-[48px] w-full rounded-xl bg-[var(--color-surface-2)] text-[14px] font-bold text-[var(--color-ink)]"
             >
               {howTo ? "Понятно" : "Как это сделать"}
             </button>
@@ -146,7 +146,7 @@ export default function InstallBlock() {
         )}
         <a
           href="/pwa-check"
-          className="mt-3 block text-center text-[12px] font-semibold text-[var(--color-muted)] underline-offset-2 hover:underline"
+          className="mt-1 flex min-h-[44px] items-center justify-center text-center text-[12px] font-semibold text-[var(--color-muted)] underline-offset-2 hover:underline"
         >
           Не получается? Проверить, что мешает
         </a>

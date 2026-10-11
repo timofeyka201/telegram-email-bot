@@ -154,7 +154,7 @@ export default function ProfilePage() {
               </p>
               <Link
                 href="/cart"
-                className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[var(--color-surface-2)] px-4 py-2 text-[13px] font-semibold"
+                className="mt-3 inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-[var(--color-surface-2)] px-5 text-[13px] font-semibold"
               >
                 Открыть корзину
               </Link>
@@ -162,7 +162,7 @@ export default function ProfilePage() {
           ) : (
             <ul className="soft-shadow divide-y divide-[var(--color-line)] overflow-hidden rounded-[var(--radius-tile)] bg-[var(--color-surface)]">
               {orders.map((o) => (
-                <li key={o.id} className="flex items-center gap-3 px-3 py-2.5">
+                <li key={o.id} className="flex items-center gap-2.5 px-3 py-3">
                   <Img
                     src={o.image}
                     alt={o.title}
@@ -181,7 +181,7 @@ export default function ProfilePage() {
                     target="_blank"
                     rel="noreferrer noopener"
                     aria-label="Открыть в магазине"
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-surface-2)] text-[var(--color-ink-soft)]"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-surface-2)] text-[var(--color-ink-soft)]"
                   >
                     <IconExternal className="h-[18px] w-[18px]" />
                   </a>
@@ -189,7 +189,7 @@ export default function ProfilePage() {
                     type="button"
                     onClick={() => forgetOrder(o.id)}
                     aria-label="Убрать из списка"
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[var(--color-muted)]"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[var(--color-muted)]"
                   >
                     <IconTrash className="h-[18px] w-[18px]" />
                   </button>
@@ -253,7 +253,7 @@ function Field({
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl bg-[var(--color-surface-2)] px-3.5 py-2.5 text-[15px] outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
+        className="field w-full rounded-xl bg-[var(--color-surface-2)] px-3.5 py-3 text-[15px] outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
       />
     </label>
   );

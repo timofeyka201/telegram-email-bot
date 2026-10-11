@@ -56,7 +56,7 @@ export default function BottomNav() {
                 <Icon className={`relative h-[22px] w-[22px] ${active ? "text-[var(--color-brand)]" : ""}`} />
                 {!!count && (
                   <span
-                    className={`tnum absolute -top-0.5 right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] font-extrabold on-accent ${
+                    className={`tnum absolute -top-0.5 right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] font-extrabold on-accent ${
                       badge === "brand" ? "bg-[var(--color-brand)]" : "bg-[var(--color-like)]"
                     }`}
                   >

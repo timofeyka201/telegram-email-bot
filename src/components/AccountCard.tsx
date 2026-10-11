@@ -44,7 +44,7 @@ export default function AccountCard() {
               setAccount(null);
               toast("Вы вышли");
             }}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-surface-2)] text-[var(--color-muted)]"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-surface-2)] text-[var(--color-muted)]"
           >
             <IconExit className="h-5 w-5" />
           </button>
@@ -91,7 +91,7 @@ export default function AccountCard() {
                 setVerifySending(false);
               }
             }}
-            className="mt-2 rounded-xl bg-[var(--color-surface)] px-3.5 py-2 text-[13px] font-bold text-[var(--color-ink)] disabled:opacity-50"
+            className="mt-2 min-h-[44px] rounded-xl bg-[var(--color-surface)] px-4 text-[13px] font-bold text-[var(--color-ink)] disabled:opacity-50"
           >
             {verifySending ? "Отправляем…" : "Выслать письмо ещё раз"}
           </button>

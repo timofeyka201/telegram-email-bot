@@ -56,7 +56,11 @@ export default function CartPage() {
       <header className="safe-top sticky top-0 z-30 flex items-center justify-between bg-[var(--color-bg)]/92 px-4 py-3 backdrop-blur-md">
         <h1 className="font-display text-[28px] leading-none">Корзина</h1>
         {cart.length > 0 && (
-          <button type="button" onClick={clearCart} className="text-[13px] font-semibold text-[var(--color-muted)]">
+          <button
+            type="button"
+            onClick={clearCart}
+            className="-mr-2.5 flex min-h-[44px] items-center rounded-full px-2.5 text-[13px] font-semibold text-[var(--color-muted)]"
+          >
             Очистить
           </button>
         )}
@@ -82,7 +86,13 @@ export default function CartPage() {
                     <Img src={item.product.images[0]} alt={item.product.title} className="h-22 w-22 rounded-2xl" fallbackLabel="" />
                   </button>
                   <div className="flex min-w-0 flex-1 flex-col">
-                    <button type="button" onClick={() => setSheet(item.product)} className="text-left">
+                    <button
+                      type="button"
+                      onClick={() => setSheet(item.product)}
+                      // Площадь нажатия больше строки текста, но в разметке
+                      // ничего не сдвигает: отступ компенсирован отрицательным.
+                      className="-my-1.5 py-1.5 text-left"
+                    >
                       <p className="line-clamp-2 text-[13px] font-medium leading-tight">{item.product.title}</p>
                     </button>
                     <p className="tnum mt-1 text-[12px] text-[var(--color-muted)]">
@@ -101,9 +111,9 @@ export default function CartPage() {
                           removeFromCart(item.product.id);
                           toast("Удалили из корзины");
                         }}
-                        className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--color-surface-2)] text-[var(--color-muted)]"
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-surface-2)] text-[var(--color-muted)]"
                       >
-                        <IconTrash className="h-4 w-4" />
+                        <IconTrash className="h-[18px] w-[18px]" />
                       </button>
                     </div>
                   </div>
@@ -179,21 +189,23 @@ export default function CartPage() {
 
 function Stepper({ qty, onChange }: { qty: number; onChange: (q: number) => void }) {
   return (
-    <div className="flex items-center gap-1 rounded-xl bg-[var(--color-surface-2)] p-0.5">
+    // Кнопки «−» и «+» были по 28 точек и стояли вплотную: промахнуться мимо
+    // соседней — обычное дело, а это чужой заказ и чужие деньги.
+    <div className="flex items-center rounded-xl bg-[var(--color-surface-2)] p-0.5">
       <button
         type="button"
         aria-label="Меньше"
         onClick={() => onChange(qty - 1)}
-        className="h-7 w-7 rounded-lg text-[16px] font-bold text-[var(--color-muted)]"
+        className="h-10 w-10 rounded-lg text-[17px] font-bold text-[var(--color-muted)] active:bg-[var(--color-surface)]"
       >
         −
       </button>
-      <span className="tnum min-w-[26px] text-center text-[14px] font-bold">{qty}</span>
+      <span className="tnum min-w-[30px] text-center text-[14px] font-bold">{qty}</span>
       <button
         type="button"
         aria-label="Больше"
         onClick={() => onChange(qty + 1)}
-        className="h-7 w-7 rounded-lg text-[16px] font-bold text-[var(--color-ink)]"
+        className="h-10 w-10 rounded-lg text-[17px] font-bold text-[var(--color-ink)] active:bg-[var(--color-surface)]"
       >
         +
       </button>

@@ -69,7 +69,7 @@ export default function LikesPage() {
 
         <Link
           href="/wishlist"
-          className="mx-4 mb-2 flex items-center gap-2 rounded-full bg-[var(--color-brand-soft)] px-4 py-2.5 text-[13px] font-bold text-[var(--color-brand)]"
+          className="mx-4 mb-2.5 flex min-h-[44px] items-center gap-2 rounded-full bg-[var(--color-brand-soft)] px-4 text-[13px] font-bold text-[var(--color-brand)]"
         >
           <IconBookmark className="h-4 w-4 shrink-0" />
           <span className="min-w-0 flex-1 truncate">
@@ -79,12 +79,12 @@ export default function LikesPage() {
         </Link>
 
         {source.length > 0 && (
-          <div className="no-scrollbar flex w-full min-w-0 items-center gap-1.5 overflow-x-auto px-4 pb-2">
+          <div className="no-scrollbar flex w-full min-w-0 items-center gap-2.5 overflow-x-auto px-4 pb-2.5">
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as Sort)}
               aria-label="Сортировка"
-              className="shrink-0 rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 text-[13px] font-semibold text-[var(--color-ink-soft)] outline-none"
+              className="chip shrink-0 rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] px-3.5 text-[13px] font-semibold text-[var(--color-ink-soft)] outline-none"
             >
               {SORTS.map(([id, label]) => (
                 <option key={id} value={id}>
@@ -95,7 +95,7 @@ export default function LikesPage() {
             <button
               type="button"
               onClick={() => setCategory(null)}
-              className={`shrink-0 rounded-full border px-3 py-1.5 text-[13px] font-medium ${
+              className={`chip shrink-0 rounded-full border px-4 text-[13px] font-medium ${
                 category === null
                   ? "border-[var(--color-brand)] bg-[var(--color-brand-soft)] text-[var(--color-brand)]"
                   : "border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-ink-soft)]"
@@ -108,7 +108,7 @@ export default function LikesPage() {
                 key={c}
                 type="button"
                 onClick={() => setCategory(category === c ? null : c)}
-                className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-[13px] font-medium ${
+                className={`chip shrink-0 whitespace-nowrap rounded-full border px-4 text-[13px] font-medium ${
                   category === c
                     ? "border-[var(--color-brand)] bg-[var(--color-brand-soft)] text-[var(--color-brand)]"
                     : "border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-ink-soft)]"
@@ -171,7 +171,7 @@ export default function LikesPage() {
                         {p.title}
                       </p>
                     </div>
-                    <div className="flex gap-1.5 px-3 pb-3">
+                    <div className="flex gap-2 px-3 pb-3">
                       <button
                         type="button"
                         disabled={inCart}
@@ -179,7 +179,7 @@ export default function LikesPage() {
                           addToCart(p);
                           toast("В корзине", "like");
                         }}
-                        className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-[var(--color-brand)] py-2 text-[12px] font-bold on-accent disabled:bg-[var(--color-surface-2)] disabled:text-[var(--color-muted)]"
+                        className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-[var(--color-brand)] text-[12px] font-bold on-accent disabled:bg-[var(--color-surface-2)] disabled:text-[var(--color-muted)]"
                       >
                         <IconCart className="h-4 w-4" />
                         {inCart ? "В корзине" : "В корзину"}
@@ -191,9 +191,9 @@ export default function LikesPage() {
                           unlike(p.id);
                           toast("Убрали");
                         }}
-                        className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--color-surface-2)] text-[var(--color-muted)]"
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-surface-2)] text-[var(--color-muted)]"
                       >
-                        <IconTrash className="h-4 w-4" />
+                        <IconTrash className="h-[18px] w-[18px]" />
                       </button>
                     </div>
                   </motion.div>
