@@ -18,6 +18,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { call, env, pause, spent, token, AeError } from "./ae-api.mjs";
+import { shortCategory } from "./ae-category.mjs";
 
 const args = Object.fromEntries(
   process.argv.slice(2).flatMap((a, i, all) =>
@@ -158,18 +159,6 @@ function images(raw) {
   // Фид отдаёт адреса без схемы («//ae01.alicdn.com/…») — браузер такое поймёт,
   // а наш загрузчик картинок нет.
   return [...new Set(all.map((u) => String(u).replace(/^\/\//, "https://")))].slice(0, 8);
-}
-
-/**
- * Категория товара в фиде не приходит — её заменяет сам фид. Названия у них
- * длинные («Дом, сад и офис. Обустройство дома и инструменты. Бытовая
- * техника»), а в ленте это подпись на кнопке фильтра, поэтому берём первую
- * часть.
- */
-function shortCategory(feedTitle) {
-  const head = String(feedTitle ?? "").split(/[.;]/)[0].trim();
-  if (!head) return undefined;
-  return head.length <= 28 ? head : head.split(",")[0].trim().slice(0, 28);
 }
 
 /**
