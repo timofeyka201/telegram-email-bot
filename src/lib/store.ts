@@ -5,7 +5,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { DEFAULT_RATES, toRub } from "./money";
 import { emptySizes, type SizeProfile } from "./sizes";
-import { emptyTaste, learn, learnReason, type RejectReason, type Taste } from "./taste";
+import { emptyTaste, learn, learnReason, learnVisit, unlearn, type RejectReason, type Taste } from "./taste";
 import type { Filters } from "./providers/types";
 import type { Product } from "./types";
 
@@ -354,8 +354,9 @@ export const useStore = create<State>()(
             cart: last.decision === "super" ? s.cart.filter((c) => c.product.id !== last.product.id) : s.cart,
             seen: s.seen.filter((id) => id !== last.product.id),
             rejected: s.rejected.filter((id) => id !== last.product.id),
-            // Отменённый отказ не должен учиться как отказ.
-            taste: learn(s.taste, last.product, last.decision === "dislike" ? "like" : "dislike"),
+            // Отменённое решение снимается ровно в том весе, в каком было
+            // начислено, а не противоположным свайпом.
+            taste: unlearn(s.taste, last.product, last.decision),
             stats,
           };
         }),
@@ -480,6 +481,9 @@ export const useStore = create<State>()(
        */
       noteOrder: (product) =>
         set((s) => ({
+          // Уход в магазин учит ленту сильнее любого свайпа: это ближайшее к
+          // покупке действие, которое витрина вообще видит.
+          taste: learnVisit(s.taste, product),
           orders: [
             {
               id: product.id,

@@ -54,6 +54,47 @@ export function learn(taste: Taste, product: Product, decision: "like" | "dislik
   return next;
 }
 
+/**
+ * Отмена решения: снимаем ровно то, что начислили.
+ *
+ * Раньше отмена применяла противоположный свайп — отмена лайка списывала 1.4
+ * вместо начисленной единицы, отмена отказа возвращала 1 вместо 1.4. При
+ * частых отменах профиль медленно сползал в минус. На границах (вес упёрся в
+ * ±8) точность всё равно теряется: сколько было отброшено ограничителем, уже
+ * не узнать.
+ */
+export function unlearn(taste: Taste, product: Product, decision: "like" | "dislike" | "super"): Taste {
+  const next: Taste = {
+    ...taste,
+    categories: { ...taste.categories },
+    brands: { ...taste.brands },
+    reasons: { ...taste.reasons },
+  };
+  const weight = -(decision === "super" ? 2 : decision === "like" ? 1 : -1.4);
+  bump(next.categories, product.category, weight);
+  bump(next.brands, product.brand, weight * 0.7);
+  return next;
+}
+
+/**
+ * Переход в магазин — самый сильный сигнал, какой у витрины есть.
+ *
+ * Свайп стоит человеку одно движение, а уход в магазин — это намерение
+ * купить: дальше он уже платит. Поэтому весит он больше «в корзину» и
+ * сильно больше лайка.
+ */
+export function learnVisit(taste: Taste, product: Product): Taste {
+  const next: Taste = {
+    ...taste,
+    categories: { ...taste.categories },
+    brands: { ...taste.brands },
+    reasons: { ...taste.reasons },
+  };
+  bump(next.categories, product.category, 3);
+  bump(next.brands, product.brand, 2.1);
+  return next;
+}
+
 /** Причина отказа уточняет профиль сильнее, чем сам свайп. */
 export function learnReason(taste: Taste, product: Product, reason: RejectReason, priceRub?: number): Taste {
   const next: Taste = {

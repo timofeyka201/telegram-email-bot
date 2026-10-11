@@ -18,12 +18,39 @@ import { decodeCursor, encodeCursor, mulberry32, shuffle, type Filters, type Pag
  */
 
 const PAGE = 18;
+
 /**
- * Сколько карточек просматривается, чтобы набрать страницу. Из окна берутся
- * лучшие по вкусу, остальные в этом круге уже не покажутся: при каталоге в сто
- * тысяч позиций потеря не имеет значения, а подбор становится заметным.
+ * Сколько карточек просматривается, чтобы набрать страницу.
+ *
+ * Было пятьдесят четыре — ровно три страницы, — и вкус в таком окне почти
+ * ничего не решал: если любимая категория занимает в каталоге три процента,
+ * в окне из пятидесяти четырёх карточек её будет полторы штуки, и
+ * подстраивать нечего. С шестью сотнями кандидатов в том же случае
+ * набирается два десятка — уже есть из чего выбирать. Просмотр шестисот
+ * карточек в памяти стоит доли миллисекунды, а остаток окна уходит в этом
+ * круге безвозвратно: при каталоге в сто тысяч позиций это не потеря.
  */
-const WINDOW = PAGE * 3;
+const POOL = Number(process.env.FEED_POOL ?? 600);
+
+/**
+ * Какую долю страницы выбирает вкус. Остальное — разведка: случайные карточки
+ * из того же окна. Без неё лента схлопывается в две-три любимые категории и
+ * человек перестаёт находить новое, а вместе с этим пропадает и смысл
+ * бесконечной ленты.
+ */
+const TASTE_SHARE = Number(process.env.FEED_TASTE_SHARE ?? 0.7);
+
+/**
+ * Вес категории, ниже которого разведка её не предлагает. −4 — это примерно
+ * три отказа подряд: уже не случайность.
+ */
+const HARD_NO = -4;
+
+/**
+ * Вес, ниже которого по модулю категория считается неизученной: человек по
+ * ней ещё не высказался, и именно такие интереснее всего показать в разведке.
+ */
+const UNKNOWN = 2;
 
 /**
  * Категории приходят из разных источников разными слагами: «furniture» и
@@ -115,6 +142,60 @@ function score(p: Product, hint: TasteHint | undefined, rnd: () => number): numb
  *  «своей базой» — человек видит этот ярлык в настройках. */
 const SNAPSHOT_LABEL: Record<string, string> = { ae: "AliExpress", etsy: "Etsy", global: "Открытый каталог" };
 
+/**
+ * Страница из окна кандидатов: большая часть — под вкус, остаток — разведка.
+ *
+ * Разведочные карточки берутся случайно из того, что вкус отложил, и
+ * перемешиваются с остальными: если поставить их блоком в конец, человек
+ * просто досвайпает до «чужого» куска и решит, что лента сломалась.
+ */
+function pick(found: Product[], hint: TasteHint, rnd: () => number): Product[] {
+  const scored = found
+    .map((p) => ({ p, s: score(p, hint, rnd) }))
+    .sort((a, b) => b.s - a.s);
+
+  const liked = Math.min(scored.length, Math.max(1, Math.round(PAGE * TASTE_SHARE)));
+  const out = scored.slice(0, liked).map((x) => x.p);
+
+  /*
+   * Разведка — это «покажи что-нибудь ещё», и порядок предпочтений тут
+   * такой: сперва то, о чём человек ещё не высказывался, потом знакомое, но
+   * не отвергнутое, и только в крайнем случае что угодно. Категории,
+   * уведённые глубоко в минус, не предлагаются: шесть отказов подряд — это
+   * уже ответ. А если человек отверг вообще всё, кроме любимого, лента
+   * честно станет лентой любимого.
+   */
+  const open = scored.slice(liked).map((x) => x.p);
+  const weightOf = (p: Product) => hint.categories?.[categoryLabel(p.category)] ?? 0;
+  const already = new Set(out.map((p) => categoryLabel(p.category)));
+  const fresh = (p: Product) => !already.has(categoryLabel(p.category));
+  const tiers = [
+    open.filter((p) => fresh(p) && Math.abs(weightOf(p)) < UNKNOWN),
+    open.filter((p) => fresh(p) && weightOf(p) > HARD_NO),
+    open.filter((p) => weightOf(p) > HARD_NO),
+    open,
+  ];
+
+  const taken = new Set<string>();
+  for (const tier of tiers) {
+    const bag = tier.filter((p) => !taken.has(p.id));
+    while (out.length < PAGE && bag.length) {
+      const [p] = bag.splice(Math.floor(rnd() * bag.length), 1);
+      taken.add(p.id);
+      out.push(p);
+    }
+    if (out.length >= PAGE) break;
+  }
+
+  // Перетасовка Фишера — Йетса: порядок внутри страницы не должен выдавать,
+  // что сначала идёт любимое, а потом новое.
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 export const localProvider: Provider = {
   id: "local",
   get label() {
@@ -158,11 +239,19 @@ export const localProvider: Provider = {
       return { products: found, cursor: encodeCursor(i, 0), looped: false, total, loose };
     }
 
+    /*
+     * Окно не должно съедать круг целиком: шестьсот кандидатов на страницу
+     * разумны для ста тысяч карточек, а для запасного каталога в две сотни
+     * это весь каталог за один заход — и лента пошла бы по второму кругу
+     * сразу же. Больше восьмой части витрины за страницу не берём.
+     */
+    const pool = Math.max(PAGE * 3, Math.min(POOL, Math.floor(all.length / 12)));
+
     /** Отбор подряд с места остановки: что набрали и докуда дошли. */
     const collect = (list: Product[], from: number, strict: boolean) => {
       const found: Product[] = [];
       let i = from;
-      for (; i < list.length && found.length < WINDOW; i++) {
+      for (; i < list.length && found.length < pool; i++) {
         const p = list[i];
         if (banned.has(p.id)) continue;
         if (strict && !passes(p, filters)) continue;
@@ -197,17 +286,10 @@ export const localProvider: Provider = {
       if (!found.length) ({ found, next } = collect(ordered, from, false));
       if (!found.length) continue;
 
-      // Вкус решает порядок внутри окна. Небольшой шум не даёт ленте застыть.
       const rnd = mulberry32(seed + r * 104729 + from);
-      const best = hint
-        ? found
-            .map((p) => ({ p, s: score(p, hint, rnd) }))
-            .sort((a, b) => b.s - a.s)
-            .slice(0, PAGE)
-            .map((x) => x.p)
-        : found.slice(0, PAGE);
+      const picked = hint ? pick(found, hint, rnd) : found.slice(0, PAGE);
 
-      const products = r > 0 ? best.map((p) => ({ ...p, id: `${p.id}-r${r}` })) : best;
+      const products = r > 0 ? picked.map((p) => ({ ...p, id: `${p.id}-r${r}` })) : picked;
       return { products, cursor: encodeCursor(next, r), looped: r !== round };
     }
 
