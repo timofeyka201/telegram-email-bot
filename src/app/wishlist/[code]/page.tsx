@@ -7,6 +7,7 @@ import AuthSheet from "@/components/AuthSheet";
 import Img from "@/components/Img";
 import { IconArrowLeft, IconCheck, IconExternal, IconGift } from "@/components/Icons";
 import { toast } from "@/components/Toast";
+import { shopUrl } from "@/lib/shop";
 import { useHydrated, useStore } from "@/lib/store";
 import { formatNative, formatRub, needsConversion, plural } from "@/lib/money";
 import { loadFriendWishlist, toggleReserve } from "@/lib/wish/client";
@@ -160,6 +161,13 @@ function GiftCard({
 }) {
   const rates = useStore((s) => s.rates);
   const takenByOther = item.reserved && !item.mine;
+  /*
+   * Подарок покупают по той же партнёрской ссылке, что и всё остальное.
+   * Здесь стоял прямой адрес товара: друг уходил на AliExpress мимо нашего
+   * перехода, и покупка не засчитывалась ни комиссией, ни статистикой.
+   * У желания, добавленного руками, своя ссылка — её и оставляем.
+   */
+  const link = item.product ? shopUrl(item.product) : item.url;
 
   return (
     <div
@@ -209,9 +217,9 @@ function GiftCard({
               {busy ? "…" : item.mine ? "Дарю я — снять" : "Беру на себя"}
             </button>
           )}
-          {item.url && (
+          {link && (
             <a
-              href={item.url}
+              href={link}
               target="_blank"
               rel="noreferrer noopener"
               aria-label="Открыть в магазине"
