@@ -5,7 +5,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { DEFAULT_RATES, toRub } from "./money";
 import { emptySizes, type SizeProfile } from "./sizes";
-import { emptyTaste, learn, learnReason, learnVisit, unlearn, type RejectReason, type Taste } from "./taste";
+import { decay, emptyTaste, learn, learnReason, learnVisit, unlearn, type RejectReason, type Taste } from "./taste";
 import type { Filters } from "./providers/types";
 import type { Product } from "./types";
 
@@ -153,6 +153,8 @@ type State = {
   finishTaste: (picked: string[], budget?: number) => void;
   answerReason: (reason: RejectReason | null) => void;
   setSizes: (sizes: SizeProfile) => void;
+  /** Пересчитать веса вкуса с поправкой на прошедшее время. */
+  ageTaste: () => void;
   setPerson: (person: Partial<Person>) => void;
   /** Человек ушёл в магазин за этим товаром — запоминаем, чтобы не потерялся. */
   noteOrder: (product: Product) => void;
@@ -470,6 +472,17 @@ export const useStore = create<State>()(
         }),
 
       setSizes: (sizes) => set({ sizes, updatedAt: Date.now() }),
+
+      /**
+       * Время само по себе — не изменение профиля, поэтому updatedAt не
+       * трогаем: иначе каждый запуск приложения толкал бы синхронизацию, а
+       * считать затухание каждое устройство умеет само.
+       */
+      ageTaste: () =>
+        set((s) => {
+          const taste = decay(s.taste);
+          return taste === s.taste ? s : { taste };
+        }),
 
       setPerson: (person) =>
         set((s) => ({ person: { ...s.person, ...person }, updatedAt: Date.now() })),

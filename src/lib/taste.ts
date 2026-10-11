@@ -16,9 +16,50 @@ export type Taste = {
   brands: Record<string, number>;
   /** причины отказов: помогают понять, что именно отталкивает */
   reasons: Record<string, number>;
+  /** когда веса в последний раз пересчитывались с поправкой на время */
+  decayedAt?: number;
 };
 
 export const emptyTaste = (): Taste => ({ picked: [], categories: {}, brands: {}, reasons: {} });
+
+/**
+ * Затухание: вкус без подтверждения тает на 10% каждые двое суток.
+ *
+ * Без этого один отказ в плохом настроении хоронит категорию навсегда:
+ * шесть свайпов влево уводят её в −8, и вернуть её может только случай —
+ * разведка её не предлагает, а значит и лайкнуть нечего. Люди меняются
+ * быстрее, чем «никогда».
+ *
+ * Считается непрерывно, а не ступеньками: 10% за двое суток — это
+ * 0.9^(дней/2), и результат не зависит от того, когда приложение открывали.
+ * Поэтому пересчёт идемпотентен и каждому устройству можно считать самому,
+ * ничего не синхронизируя.
+ */
+const DECAY_STEP = 0.9;
+const DECAY_DAYS = 2;
+/** Вес меньше этого — шум: забываем совсем, чтобы профиль не разрастался. */
+const FORGET_BELOW = 0.3;
+/** Чаще раза в час пересчитывать нечего. */
+const MIN_GAP = 3600_000;
+
+export function decay(taste: Taste, now = Date.now()): Taste {
+  const since = taste.decayedAt;
+  // Профиль, заведённый до появления затухания: время отсчитываем с этого
+  // момента, задним числом ничего не отнимаем.
+  if (!since) return { ...taste, decayedAt: now };
+  if (now - since < MIN_GAP) return taste;
+
+  const days = (now - since) / 86_400_000;
+  const k = DECAY_STEP ** (days / DECAY_DAYS);
+  const fade = (map: Record<string, number>) =>
+    Object.fromEntries(
+      Object.entries(map)
+        .map(([key, value]) => [key, value * k] as const)
+        .filter(([, value]) => Math.abs(value) >= FORGET_BELOW),
+    );
+
+  return { ...taste, categories: fade(taste.categories), brands: fade(taste.brands), decayedAt: now };
+}
 
 /** Что можно ответить, отказываясь от товара. */
 export const REJECT_REASONS = [

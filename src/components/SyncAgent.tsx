@@ -62,6 +62,12 @@ export default function SyncAgent() {
     };
   }, [hydrated]);
 
+  // Вкус тает со временем: пересчитываем при запуске, до первого запроса
+  // ленты, чтобы страница собиралась уже по остывшему профилю.
+  useEffect(() => {
+    if (hydrated) useStore.getState().ageTaste();
+  }, [hydrated]);
+
   useEffect(() => {
     if (!account) return;
     return startSyncAgent();

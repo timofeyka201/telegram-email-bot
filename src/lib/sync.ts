@@ -104,6 +104,9 @@ function merge(local: SyncedProfile, remote: SyncedProfile): SyncedProfile {
       categories: weights(remote.taste?.categories, local.taste?.categories),
       brands: weights(remote.taste?.brands, local.taste?.brands),
       reasons: weights(remote.taste?.reasons, local.taste?.reasons),
+      // Обе стороны к этому моменту уже остыли каждая по своим часам, а
+      // сложенные веса — новое начало отсчёта.
+      decayedAt: Date.now(),
     },
     sizes: Object.keys(fresh.sizes ?? {}).length ? fresh.sizes : (stale.sizes ?? {}),
     // Имя и телефон: поле за полем, иначе заполненное на одном устройстве
