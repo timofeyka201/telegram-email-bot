@@ -163,12 +163,9 @@ export default function ProfilePage() {
             <ul className="soft-shadow divide-y divide-[var(--color-line)] overflow-hidden rounded-[var(--radius-tile)] bg-[var(--color-surface)]">
               {orders.map((o) => (
                 <li key={o.id} className="flex items-center gap-2.5 px-3 py-3">
-                  <Img
-                    src={o.image}
-                    alt={o.title}
-                    className="h-14 w-14 shrink-0 rounded-xl"
-                    fallbackLabel={o.title.slice(0, 20)}
-                  />
+                  {/* Без подписи: в квадрат 56 точек название не влезает и
+                      вылезает за края серой плашки. */}
+                  <Img src={o.image} alt={o.title} className="h-14 w-14 shrink-0 rounded-xl" fallbackLabel="" />
                   <div className="min-w-0 flex-1">
                     <p className="line-clamp-2 text-[13px] font-semibold leading-snug">{o.title}</p>
                     <p className="tnum mt-0.5 text-[12px] text-[var(--color-muted)]">

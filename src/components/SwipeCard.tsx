@@ -403,11 +403,17 @@ export default function SwipeCard({ product, rates, depth, showHint, onDecide, o
               )}
             </div>
           </div>
-          <h2 className="line-clamp-2 min-h-[42px] text-[16px] font-semibold leading-[1.3]">{product.title}</h2>
-          <p className="truncate text-[13px] font-medium text-[var(--color-muted)]">
-            {meta || (product.category ? categoryLabel(product.category) : "")}
-            {needsConversion(product.currency) && ` · ${formatNative(product.price, product.currency)}`}
-          </p>
+          {/* Название и строка под ним держат общую высоту, а не каждое свою:
+              у короткого названия пустота тогда остаётся внизу блока, а не
+              повисает между строками. Высота постоянная намеренно — иначе
+              граница фотографии и подписи прыгает от карточки к карточке. */}
+          <div className="flex min-h-[60px] flex-col gap-1">
+            <h2 className="line-clamp-2 text-[16px] font-semibold leading-[1.3]">{product.title}</h2>
+            <p className="truncate text-[13px] font-medium text-[var(--color-muted)]">
+              {meta || (product.category ? categoryLabel(product.category) : "")}
+              {needsConversion(product.currency) && ` · ${formatNative(product.price, product.currency)}`}
+            </p>
+          </div>
         </div>
       </div>
     </motion.div>

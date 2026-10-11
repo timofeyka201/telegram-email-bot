@@ -70,7 +70,10 @@ export default function CartPage() {
         <Empty />
       ) : (
         <>
-          <div className="flex-1 space-y-2.5 p-4 pb-52">
+          {/* Запас снизу — под плавающую панель итога: она висит на 68 точках
+              от низа и занимает около 150, последняя карточка не должна
+              уезжать под неё. */}
+          <div className="flex-1 space-y-2.5 p-4 pb-60">
             <AnimatePresence initial={false}>
               {cart.map((item) => (
                 <motion.div
@@ -95,15 +98,21 @@ export default function CartPage() {
                     >
                       <p className="line-clamp-2 text-[13px] font-medium leading-tight">{item.product.title}</p>
                     </button>
-                    <p className="tnum mt-1 text-[12px] text-[var(--color-muted)]">
-                      {formatRub(unitPrice(item), item.product.currency, rates)} / шт
-                      {needsConversion(item.product.currency) ? ` · ${formatNative(unitPrice(item), item.product.currency)}` : ""}
-                    </p>
-                    <div className="mt-auto flex items-center gap-2 pt-1.5">
-                      <Stepper qty={item.qty} onChange={(q) => setQty(item.product.id, q)} />
-                      <span className="tnum ml-auto font-display text-[15px] font-bold">
+                    {/* Цена за штуку и сумма — в одной строке, кнопки — в
+                        следующей. Когда всё стояло одним рядом, на узком
+                        экране сумма переносилась и «₽» уезжало под цифры. */}
+                    <div className="mt-1 flex items-baseline justify-between gap-2">
+                      <p className="tnum min-w-0 truncate text-[12px] text-[var(--color-muted)]">
+                        {formatRub(unitPrice(item), item.product.currency, rates)} / шт
+                        {needsConversion(item.product.currency) ? ` · ${formatNative(unitPrice(item), item.product.currency)}` : ""}
+                      </p>
+                      <span className="tnum shrink-0 whitespace-nowrap font-display text-[16px] font-bold">
                         {formatRub(unitPrice(item) * item.qty, item.product.currency, rates)}
                       </span>
+                    </div>
+                    <div className="mt-auto flex items-center gap-2 pt-2">
+                      <Stepper qty={item.qty} onChange={(q) => setQty(item.product.id, q)} />
+                      <span className="ml-auto" />
                       <button
                         type="button"
                         aria-label="Удалить"
@@ -156,7 +165,10 @@ export default function CartPage() {
                   )}
                 </div>
               </div>
-              <div className="mt-3 flex gap-2">
+              {/* На узких экранах (320 точек и меньше) подписи в один ряд не
+                  помещаются и переносятся внутри кнопок — там ставим их друг
+                  под другом. */}
+              <div className="mt-3 flex flex-col gap-2 min-[360px]:flex-row">
                 <button
                   type="button"
                   onClick={copyList}
