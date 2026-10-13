@@ -9,6 +9,7 @@ export type CatalogFile = {
   kind: string;
   generatedAt?: string;
   categories?: string[];
+  groups?: string[];
   tags?: string[];
   products: Product[];
 };
@@ -89,6 +90,23 @@ export function catalogInfo(): { kind: string; generatedAt: string | null; total
     source,
     path: catalogPath(),
   };
+}
+
+/**
+ * Какие разделы есть в снапшоте. Нужно, чтобы отличить «каталог размечен, и
+ * вот эти карточки остались без раздела» от «каталог не размечен вовсе» —
+ * во втором случае прятать нечего, иначе лента окажется пустой.
+ */
+let groupCache: { source: Product[]; groups: string[] } | null = null;
+
+export function catalogGroups(): string[] {
+  const { file } = load();
+  if (file.groups?.length) return file.groups;
+  const all = catalogProducts();
+  if (groupCache?.source !== all) {
+    groupCache = { source: all, groups: [...new Set(all.map((p) => p.group).filter(Boolean) as string[])] };
+  }
+  return groupCache.groups;
 }
 
 /** Какие скрытые метки вообще встречаются в снапшоте. */

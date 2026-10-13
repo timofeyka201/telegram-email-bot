@@ -1,5 +1,5 @@
-import { catalogCategories, catalogInfo, catalogProducts, catalogTags } from "../catalog";
-import { categoryLabel, groupLabel } from "../categories";
+import { catalogCategories, catalogGroups, catalogInfo, catalogProducts, catalogTags } from "../catalog";
+import { categoryLabel, groupLabel, OTHER_GROUP } from "../categories";
 import { baseId } from "../ids";
 import type { Product } from "../types";
 import { toRub } from "../money";
@@ -280,6 +280,24 @@ export const localProvider: Provider = {
     const banned = new Set((hint?.exclude ?? []).map(baseId));
 
     /*
+     * «Остальное» — это запасник, а не лента.
+     *
+     * Раздел не достался тем карточкам, чьё название правилам ни о чём не
+     * сказало: там и настоящая одежда, и случайный хлам, и понять заранее
+     * нельзя. В ленту такое не идёт — она обещает витрину одежды, а не
+     * лотерею. Но и выбрасывать их мы не стали, поэтому достать их всё ещё
+     * можно двумя способами: выбрать раздел «Остальное» руками или найти
+     * поиском по слову из названия. Поиск ниже идёт отдельной дорогой и
+     * этого правила не знает — там человек сам сказал, что ищет.
+     *
+     * Если каталог ещё не размечен, прятать нечего: без этой проверки
+     * запасной каталог, у которого разделов нет вовсе, показал бы пустую
+     * ленту.
+     */
+    const hideUngrouped = filters?.group !== OTHER_GROUP && catalogGroups().length > 0;
+    const allowed = (p: Product) => (hideUngrouped && !p.group ? false : passes(p, filters));
+
+    /*
      * Поиск идёт отдельной дорогой.
      *
      * Выдача по запросу упорядочена близостью к нему, а не вкусом и не
@@ -315,7 +333,7 @@ export const localProvider: Provider = {
       for (; i < list.length && found.length < pool; i++) {
         const p = list[i];
         if (skip.has(p.id)) continue;
-        if (!passes(p, filters)) continue;
+        if (!allowed(p)) continue;
         found.push(p);
       }
       return { found, next: i };
@@ -384,7 +402,7 @@ export const localProvider: Provider = {
             cursor: encodeCursor(offset, round),
             looped: false,
             noMore: true,
-            total: all.filter((p) => passes(p, filters)).length,
+            total: all.filter(allowed).length,
           };
         }
         continue;
