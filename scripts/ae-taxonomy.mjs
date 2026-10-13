@@ -30,7 +30,7 @@ export function normalize(text) {
 }
 
 /** `слово` — начало слова, `=слово` — слово целиком. */
-function prepare(words) {
+export function prepare(words) {
   return words.map((w) =>
     w.startsWith("=") ? ` ${normalize(w.slice(1)).trim()} ` : ` ${normalize(w).trim()}`,
   );
@@ -157,7 +157,7 @@ const PREPARED = RULES.map(([category, words]) => [category, prepare(words)]);
 const PREPARED_AUDIENCE = AUDIENCE_WORDS.map(([who, words]) => [who, prepare(words)]);
 const PREPARED_IMPLIED = IMPLIED_AUDIENCE.map(([who, words]) => [who, prepare(words)]);
 
-function match(hay, pairs) {
+export function match(hay, pairs) {
   for (const [value, words] of pairs) {
     for (const word of words) if (hay.includes(word)) return value;
   }

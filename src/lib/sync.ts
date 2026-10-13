@@ -81,9 +81,9 @@ function merge(local: SyncedProfile, remote: SyncedProfile): SyncedProfile {
   const fresh = remoteNewer ? remote : local;
   const stale = remoteNewer ? local : remote;
 
-  const weights = (a: Record<string, number> = {}, b: Record<string, number> = {}) => {
+  const weights = (a: Record<string, number> = {}, b: Record<string, number> = {}, limit = 8) => {
     const out: Record<string, number> = { ...a };
-    for (const [k, v] of Object.entries(b)) out[k] = Math.max(-8, Math.min(8, (out[k] ?? 0) + v));
+    for (const [k, v] of Object.entries(b)) out[k] = Math.max(-limit, Math.min(limit, (out[k] ?? 0) + v));
     return out;
   };
 
@@ -103,6 +103,8 @@ function merge(local: SyncedProfile, remote: SyncedProfile): SyncedProfile {
       budget: fresh.taste?.budget ?? stale.taste?.budget,
       categories: weights(remote.taste?.categories, local.taste?.categories),
       brands: weights(remote.taste?.brands, local.taste?.brands),
+      // У меток свой потолок — вчетверо ниже, чем у категорий.
+      tags: weights(remote.taste?.tags, local.taste?.tags, 4),
       reasons: weights(remote.taste?.reasons, local.taste?.reasons),
       // Обе стороны к этому моменту уже остыли каждая по своим часам, а
       // сложенные веса — новое начало отсчёта.

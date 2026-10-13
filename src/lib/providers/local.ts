@@ -54,6 +54,12 @@ const HARD_NO = -4;
 const UNKNOWN = 2;
 
 /**
+ * Сколько очков суммарно могут дать метки карточки. Вес категории доходит до
+ * восьми, и метки не должны его перевешивать: они подсказка, а не приговор.
+ */
+const TAG_CAP = 3;
+
+/**
  * Категории приходят из разных источников разными слагами: «furniture» и
  * «Furniture» — это одно и то же. Схлопываем их по русскому ярлыку, он же
  * становится значением фильтра. Одиночные категории в список не берём: выбирать
@@ -163,6 +169,18 @@ function score(p: Product, hint: TasteHint | undefined, rnd: () => number): numb
   if (label && hint.picked?.includes(label)) value += 3;
   if (label && hint.categories) value += hint.categories[label] ?? 0;
   if (p.brand && hint.brands) value += (hint.brands[p.brand] ?? 0) * 0.7;
+
+  /*
+   * Метки складываются, но их вклад ограничен: у карточки их до восьми, и
+   * без потолка «чёрное зимнее кожаное» перебивало бы любую категорию. Так
+   * метки уточняют порядок внутри того, что и так подходит, а не решают за
+   * человека, что ему показать.
+   */
+  if (p.tags?.length && hint.tags) {
+    let sum = 0;
+    for (const tag of p.tags) sum += hint.tags[tag] ?? 0;
+    value += Math.max(-TAG_CAP, Math.min(TAG_CAP, sum * 0.5));
+  }
 
   if (hint.budget !== undefined && p.price !== undefined) {
     const rub = toRub(p.price, p.currency, hint.rates ?? {}) ?? p.price;

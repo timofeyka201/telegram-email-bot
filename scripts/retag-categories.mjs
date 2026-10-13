@@ -18,6 +18,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { categoryByTitle } from "./ae-taxonomy.mjs";
+import { tagsByTitle } from "./ae-tags.mjs";
 
 const args = Object.fromEntries(
   process.argv.slice(2).flatMap((a, i, all) =>
@@ -56,6 +57,11 @@ function main() {
   );
   console.log("");
 
+  /** Метки: сколько карточек получили каждую. */
+  const tagCounts = new Map();
+  let tagged = 0;
+  let tagTotal = 0;
+
   /** Раздел → категория → сколько карточек. */
   const tree = new Map();
   const examples = new Map();
@@ -65,6 +71,12 @@ function main() {
   let changed = 0;
 
   for (const p of products) {
+    const tags = tagsByTitle(p.title);
+    if (tags.length) tagged += 1;
+    tagTotal += tags.length;
+    for (const tag of tags) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+    if (APPLY) p.tags = tags.length ? tags : undefined;
+
     const next = categoryByTitle(p.title);
     if (!next) {
       keptTotal += 1;
@@ -110,6 +122,28 @@ function main() {
   }
 
   console.log("");
+  console.log("СКРЫТЫЕ МЕТКИ (их человек не видит, на них учится лента)");
+  console.log(
+    `  есть хотя бы одна у ${tagged} из ${products.length} (${Math.round((tagged / products.length) * 100)}%), ` +
+      `в среднем ${(tagTotal / products.length).toFixed(1)} на карточку`,
+  );
+  // По группам — чтобы было видно, какие правила не срабатывают вовсе.
+  const byGroup = new Map();
+  for (const [tag, n] of tagCounts) {
+    const group = tag.split(":")[0];
+    byGroup.set(group, (byGroup.get(group) ?? 0) + n);
+  }
+  for (const [group, n] of [...byGroup.entries()].sort((a, b) => b[1] - a[1])) {
+    const top = [...tagCounts.entries()]
+      .filter(([tag]) => tag.startsWith(`${group}:`))
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([tag, k]) => `${tag.split(":")[1]} ${k}`)
+      .join(", ");
+    console.log(`  ${pad(n, 6)} ${pad(group, 10)} ${top}`);
+  }
+
+  console.log("");
   console.log("САМЫЕ ЧАСТЫЕ ПЕРЕЕЗДЫ");
   for (const [pair, n] of [...moved.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15)) {
     console.log(`  ${pad(n, 6)} ${pair}`);
@@ -129,6 +163,7 @@ function main() {
   }
 
   file.categories = [...new Set((file.products ?? []).map((p) => p.category).filter(Boolean))];
+  file.tags = [...new Set((file.products ?? []).flatMap((p) => p.tags ?? []))].sort();
   file.groups = [...new Set((file.products ?? []).map((p) => p.group).filter(Boolean))];
   mkdirSync(dirname(FILE), { recursive: true });
   const tmp = `${FILE}.tmp`;

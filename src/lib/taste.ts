@@ -14,13 +14,22 @@ export type Taste = {
   /** накопленные предпочтения: ключ → вес (может быть отрицательным) */
   categories: Record<string, number>;
   brands: Record<string, number>;
+  /**
+   * Скрытые метки из названия: «материал:кожа», «цвет:чёрный», «стиль:спорт».
+   *
+   * Категория говорит, что это за вещь, метка — какая она. Кожаная сумка и
+   * кожаная куртка лежат в разных категориях, и без меток отказ от одной
+   * ничего не сообщал о другой. Вес метки меньше веса категории: меток у
+   * карточки до восьми, и без этого они перевесили бы всё остальное.
+   */
+  tags?: Record<string, number>;
   /** причины отказов: помогают понять, что именно отталкивает */
   reasons: Record<string, number>;
   /** когда веса в последний раз пересчитывались с поправкой на время */
   decayedAt?: number;
 };
 
-export const emptyTaste = (): Taste => ({ picked: [], categories: {}, brands: {}, reasons: {} });
+export const emptyTaste = (): Taste => ({ picked: [], categories: {}, brands: {}, tags: {}, reasons: {} });
 
 /**
  * Затухание: вкус без подтверждения тает на 10% каждые двое суток.
@@ -58,7 +67,13 @@ export function decay(taste: Taste, now = Date.now()): Taste {
         .filter(([, value]) => Math.abs(value) >= FORGET_BELOW),
     );
 
-  return { ...taste, categories: fade(taste.categories), brands: fade(taste.brands), decayedAt: now };
+  return {
+    ...taste,
+    categories: fade(taste.categories),
+    brands: fade(taste.brands),
+    tags: fade(taste.tags ?? {}),
+    decayedAt: now,
+  };
 }
 
 /** Что можно ответить, отказываясь от товара. */
@@ -73,25 +88,44 @@ export const REJECT_REASONS = [
 
 export type RejectReason = (typeof REJECT_REASONS)[number]["id"];
 
-const bump = (map: Record<string, number>, key: string | undefined, delta: number) => {
+const bump = (map: Record<string, number>, key: string | undefined, delta: number, limit = 8) => {
   if (!key) return;
-  map[key] = Math.max(-8, Math.min(8, (map[key] ?? 0) + delta));
+  map[key] = Math.max(-limit, Math.min(limit, (map[key] ?? 0) + delta));
 };
+
+/**
+ * Насколько метка слабее категории. Меток у карточки до восьми, и считай они
+ * наравне, профиль превратился бы в «любит чёрное» — а чёрное есть в каждой
+ * второй карточке.
+ */
+const TAG_SHARE = 0.45;
+/** Потолок веса метки. Ниже, чем у категории: сигнал всё-таки косвенный. */
+const TAG_LIMIT = 4;
+
+const bumpTags = (map: Record<string, number>, tags: string[] | undefined, delta: number) => {
+  for (const tag of tags ?? []) bump(map, tag, delta * TAG_SHARE, TAG_LIMIT);
+};
+
+/** Копия профиля, в которой можно править веса. Метки есть всегда: профиль
+ *  мог быть заведён до их появления. */
+const draft = (taste: Taste): Taste & { tags: Record<string, number> } => ({
+  ...taste,
+  categories: { ...taste.categories },
+  brands: { ...taste.brands },
+  tags: { ...taste.tags },
+  reasons: { ...taste.reasons },
+});
 
 /**
  * Свайп влево — явный отказ, и весит он больше лайка: человеку проще
  * пролистнуть что угодно, чем осознанно отвергнуть.
  */
 export function learn(taste: Taste, product: Product, decision: "like" | "dislike" | "super"): Taste {
-  const next: Taste = {
-    ...taste,
-    categories: { ...taste.categories },
-    brands: { ...taste.brands },
-    reasons: { ...taste.reasons },
-  };
+  const next = draft(taste);
   const weight = decision === "super" ? 2 : decision === "like" ? 1 : -1.4;
   bump(next.categories, product.category, weight);
   bump(next.brands, product.brand, weight * 0.7);
+  bumpTags(next.tags, product.tags, weight);
   return next;
 }
 
@@ -105,15 +139,11 @@ export function learn(taste: Taste, product: Product, decision: "like" | "dislik
  * не узнать.
  */
 export function unlearn(taste: Taste, product: Product, decision: "like" | "dislike" | "super"): Taste {
-  const next: Taste = {
-    ...taste,
-    categories: { ...taste.categories },
-    brands: { ...taste.brands },
-    reasons: { ...taste.reasons },
-  };
+  const next = draft(taste);
   const weight = -(decision === "super" ? 2 : decision === "like" ? 1 : -1.4);
   bump(next.categories, product.category, weight);
   bump(next.brands, product.brand, weight * 0.7);
+  bumpTags(next.tags, product.tags, weight);
   return next;
 }
 
@@ -125,29 +155,31 @@ export function unlearn(taste: Taste, product: Product, decision: "like" | "disl
  * сильно больше лайка.
  */
 export function learnVisit(taste: Taste, product: Product): Taste {
-  const next: Taste = {
-    ...taste,
-    categories: { ...taste.categories },
-    brands: { ...taste.brands },
-    reasons: { ...taste.reasons },
-  };
+  const next = draft(taste);
   bump(next.categories, product.category, 3);
   bump(next.brands, product.brand, 2.1);
+  bumpTags(next.tags, product.tags, 3);
   return next;
 }
 
 /** Причина отказа уточняет профиль сильнее, чем сам свайп. */
 export function learnReason(taste: Taste, product: Product, reason: RejectReason, priceRub?: number): Taste {
-  const next: Taste = {
-    ...taste,
-    categories: { ...taste.categories },
-    brands: { ...taste.brands },
-    reasons: { ...taste.reasons },
-  };
+  const next = draft(taste);
   next.reasons[reason] = (next.reasons[reason] ?? 0) + 1;
 
   if (reason === "category") bump(next.categories, product.category, -2.5);
-  if (reason === "look") bump(next.brands, product.brand, -1.5);
+  if (reason === "look") {
+    bump(next.brands, product.brand, -1.5);
+    /*
+     * «Не нравится внешне» — это про вид, а не про вещь. Цвет и стиль
+     * получают по полной, материал — вполовину: кожа отталкивает реже, чем
+     * розовые стразы, а метки сезона и повода тут вовсе ни при чём.
+     */
+    for (const tag of product.tags ?? []) {
+      if (tag.startsWith("цвет:") || tag.startsWith("стиль:")) bump(next.tags, tag, -1, TAG_LIMIT);
+      else if (tag.startsWith("материал:")) bump(next.tags, tag, -0.5, TAG_LIMIT);
+    }
+  }
   if (reason === "quality") bump(next.brands, product.brand, -2);
   // «Дорого» — не про товар, а про планку: опускаем бюджет к этой цене.
   if (reason === "price" && priceRub !== undefined) {
@@ -164,6 +196,7 @@ export type TasteHint = {
   rates?: Record<string, number>;
   categories?: Record<string, number>;
   brands?: Record<string, number>;
+  tags?: Record<string, number>;
   exclude?: string[];
 };
 
@@ -181,6 +214,7 @@ export function toHint(taste: Taste, excludeIds: string[], rates?: Record<string
     rates,
     categories: trim(taste.categories),
     brands: trim(taste.brands),
+    tags: trim(taste.tags ?? {}),
     // Список показанного не должен раздуваться бесконечно: это тело запроса,
     // которое уходит с телефона на каждой подгрузке.
     exclude: excludeIds.slice(0, 800),

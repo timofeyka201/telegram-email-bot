@@ -20,6 +20,7 @@ import { dirname, join } from "node:path";
 import { call, env, pause, spent, token, AeError } from "./ae-api.mjs";
 import { shortCategory } from "./ae-category.mjs";
 import { categoryByTitle } from "./ae-taxonomy.mjs";
+import { tagsByTitle } from "./ae-tags.mjs";
 
 const args = Object.fromEntries(
   process.argv.slice(2).flatMap((a, i, all) =>
@@ -190,6 +191,9 @@ function toProduct(row, feedTitle) {
    * остаётся запасным вариантом для того, о чём название промолчало.
    */
   const tag = categoryByTitle(title);
+  // Метки — то же название, разобранное мельче: материал, цвет, сезон, повод.
+  // Человеку они не видны, на них учится лента.
+  const tags = tagsByTitle(title);
 
   return {
     id: `ae-${id}`,
@@ -203,6 +207,7 @@ function toProduct(row, feedTitle) {
     currency: String(pick(a, "price.currency", "currency", "currencyCode") ?? "RUB"),
     category: tag?.category ?? shortCategory(feedTitle),
     group: tag?.parent,
+    tags: tags.length ? tags : undefined,
     brand: pick(a, "brand", "brandName") ?? undefined,
     // Рейтинг у площадки по пятибалльной шкале; сотенную встречаем на всякий случай.
     rating: rating !== undefined && rating > 5 ? rating / 20 : rating,
