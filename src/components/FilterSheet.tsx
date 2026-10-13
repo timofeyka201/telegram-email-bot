@@ -4,12 +4,13 @@ import { useEffect, useState } from "react";
 import Sheet from "./Sheet";
 import { IconCheck, IconSearch, IconX } from "./Icons";
 import { formatNative } from "@/lib/money";
-import type { Filters } from "@/lib/providers/types";
+import type { Filters, GroupFacet } from "@/lib/providers/types";
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  categories: string[];
+  /** разделы витрины с категориями внутри — те же, что в строке под шапкой */
+  groups: GroupFacet[];
   maxPrice: number;
   currency: string;
   value: Filters;
@@ -17,7 +18,7 @@ type Props = {
   onApply: (filters: Filters, query: string) => void;
 };
 
-export default function FilterSheet({ open, onClose, categories, maxPrice, currency, value, query, onApply }: Props) {
+export default function FilterSheet({ open, onClose, groups, maxPrice, currency, value, query, onApply }: Props) {
   // Правки живут в черновике: пока не нажали «Показать», лента не дёргается.
   const [draft, setDraft] = useState<Filters>(value);
   const [text, setText] = useState(query);
@@ -47,6 +48,21 @@ export default function FilterSheet({ open, onClose, categories, maxPrice, curre
       const list = d.categories ?? [];
       return { ...d, categories: list.includes(c) ? list.filter((x) => x !== c) : [...list, c] };
     });
+
+  /** Категории выбранного раздела. Без раздела их не показываем вовсе. */
+  const inside = draft.group ? (groups.find((g) => g.title === draft.group)?.categories ?? []) : [];
+
+  const pickGroup = (group: string | null) =>
+    setDraft((d) => {
+      // Категория принадлежит разделу и уходит вместе с ним — ровно как в
+      // строке под шапкой, иначе два фильтра пересекаются в пустоту.
+      const next = group ? (groups.find((g) => g.title === group)?.categories ?? []) : [];
+      return { ...d, group: group ?? undefined, categories: (d.categories ?? []).filter((c) => next.includes(c)) };
+    });
+
+  const chip = "chip gap-1.5 rounded-full border px-4 text-[13px] font-medium transition-colors";
+  const chipOn = "border-[var(--color-brand)] bg-[var(--color-brand-soft)] text-[var(--color-brand)]";
+  const chipOff = "border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-ink-soft)]";
 
   return (
     <Sheet
@@ -100,28 +116,72 @@ export default function FilterSheet({ open, onClose, categories, maxPrice, curre
         )}
       </div>
 
-      <p className="mb-2 mt-6 text-[12px] font-bold uppercase tracking-wider text-[var(--color-muted)]">Категории</p>
+      {/*
+        Раздел и категория, а не три с лишним десятка категорий кучей.
+        Плоским списком шторка превращалась в простыню, в которой «Купальники»
+        стоят между «Кухней» и «Мебелью»: искать глазами дольше, чем набрать
+        в поиске. Разделов одиннадцать — они помещаются на экран, а категории
+        показываются только у выбранного.
+      */}
+      <p className="mb-2 mt-6 text-[12px] font-bold uppercase tracking-wider text-[var(--color-muted)]">Раздел</p>
       <div className="flex flex-wrap gap-2">
-        {categories.map((c) => {
-          const on = (draft.categories ?? []).includes(c);
-          return (
+        {draft.group ? (
+          /*
+            Выбранный раздел занимает место всех остальных: иначе категории
+            уезжают под четырнадцать чипов, и до них надо доскроллить —
+            а ради них шторку и открывали.
+          */
+          <button
+            type="button"
+            onClick={() => pickGroup(null)}
+            aria-label={`Раздел «${draft.group}». Выбрать другой`}
+            className={`${chip} ${chipOn} pr-3`}
+          >
+            {draft.group}
+            <IconX className="h-3.5 w-3.5" />
+          </button>
+        ) : (
+          groups.map((g) => (
             <button
-              key={c}
+              key={g.title}
               type="button"
-              onClick={() => toggle(c)}
-              aria-pressed={on}
-              className={`chip gap-1.5 rounded-full border px-4 text-[13px] font-medium transition-colors ${
-                on
-                  ? "border-[var(--color-brand)] bg-[var(--color-brand-soft)] text-[var(--color-brand)]"
-                  : "border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-ink-soft)]"
-              }`}
+              onClick={() => pickGroup(g.title)}
+              className={`${chip} ${chipOff}`}
             >
-              {on && <IconCheck className="h-3.5 w-3.5" />}
-              {c}
+              {g.title}
             </button>
-          );
-        })}
+          ))
+        )}
       </div>
+
+      {draft.group ? (
+        <>
+          <p className="mb-2 mt-6 text-[12px] font-bold uppercase tracking-wider text-[var(--color-muted)]">
+            Категории в разделе
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {inside.map((c) => {
+              const on = (draft.categories ?? []).includes(c);
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => toggle(c)}
+                  aria-pressed={on}
+                  className={`${chip} ${on ? chipOn : chipOff}`}
+                >
+                  {on && <IconCheck className="h-3.5 w-3.5" />}
+                  {c}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <p className="mt-2 text-[13px] text-[var(--color-muted)]">
+          Выберите раздел — покажем категории внутри него.
+        </p>
+      )}
 
       <p className="mb-2 mt-6 text-[12px] font-bold uppercase tracking-wider text-[var(--color-muted)]">Цена до</p>
       <div className="soft-shadow rounded-2xl bg-[var(--color-surface)] px-4 py-3.5">

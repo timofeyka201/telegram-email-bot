@@ -371,7 +371,7 @@ export default function DeckPage() {
       <FilterSheet
         open={filtersOpen}
         onClose={() => setFiltersOpen(false)}
-        categories={groupCategories}
+        groups={facets.groups}
         maxPrice={facets.maxPrice}
         currency={facets.currency}
         value={filters}
