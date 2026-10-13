@@ -151,7 +151,7 @@ type State = {
   setFilters: (filters: Filters) => void;
   setTheme: (theme: "system" | "light" | "dark") => void;
   finishOnboarding: () => void;
-  finishTaste: (picked: string[], budget?: number) => void;
+  finishTaste: (picked: string[], budget?: number, tags?: Record<string, number>) => void;
   answerReason: (reason: RejectReason | null) => void;
   setSizes: (sizes: SizeProfile) => void;
   /** Пересчитать веса вкуса с поправкой на прошедшее время. */
@@ -470,11 +470,13 @@ export const useStore = create<State>()(
 
       finishOnboarding: () => set({ onboarded: true }),
 
-      finishTaste: (picked, budget) =>
+      finishTaste: (picked, budget, tags) =>
         set((s) => ({
           tasted: true,
           updatedAt: Date.now(),
-          taste: { ...s.taste, picked, budget },
+          // Ответы про метки — начальные веса, а не прибавка: до теста
+          // человек ничего не насвайпал, складывать не с чем.
+          taste: { ...s.taste, picked, budget, tags: { ...s.taste.tags, ...tags } },
           // Ответы теста должны сразу отразиться на ленте.
           deck: [],
           index: 0,

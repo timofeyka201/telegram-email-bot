@@ -1,4 +1,4 @@
-import { catalogCategories, catalogInfo, catalogProducts } from "../catalog";
+import { catalogCategories, catalogInfo, catalogProducts, catalogTags } from "../catalog";
 import { categoryLabel, groupLabel } from "../categories";
 import { baseId } from "../ids";
 import type { Product } from "../types";
@@ -129,11 +129,19 @@ function buildGroupFacets(all: Product[]): GroupFacet[] {
  * Пересчитываются вместе со снапшотом: прежние константы вычислялись один раз
  * при запуске и после обновления каталога показывали бы вчерашние категории.
  */
-export function facets(): { categories: string[]; groups: GroupFacet[]; maxPrice: number; currency: string } {
+export function facets(): {
+  categories: string[];
+  groups: GroupFacet[];
+  tags: string[];
+  maxPrice: number;
+  currency: string;
+} {
   const all = catalogProducts();
   return {
     categories: buildCategoryFacets(all),
     groups: buildGroupFacets(all),
+    // Метки нужны тесту вкусов: спрашивать про то, чего в каталоге нет, незачем.
+    tags: catalogTags(),
     maxPrice: all.reduce((max, p) => (p.price !== undefined && p.price > max ? p.price : max), 0),
     currency: all[0]?.currency ?? "RUB",
   };

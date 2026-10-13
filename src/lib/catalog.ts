@@ -9,6 +9,7 @@ export type CatalogFile = {
   kind: string;
   generatedAt?: string;
   categories?: string[];
+  tags?: string[];
   products: Product[];
 };
 
@@ -88,6 +89,15 @@ export function catalogInfo(): { kind: string; generatedAt: string | null; total
     source,
     path: catalogPath(),
   };
+}
+
+/** Какие скрытые метки вообще встречаются в снапшоте. */
+export function catalogTags(): string[] {
+  const { file } = load();
+  if (file.tags?.length) return file.tags;
+  const out = new Set<string>();
+  for (const p of catalogProducts()) for (const tag of p.tags ?? []) out.add(tag);
+  return [...out];
 }
 
 export function catalogCategories(): string[] {

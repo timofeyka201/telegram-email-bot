@@ -29,7 +29,7 @@ const PREFETCH_AT = 8;
 /** Сколько первых свайпов подсвечивать зоны тапа. */
 const HINT_SWIPES = 3;
 
-type Facets = { categories: string[]; groups: GroupFacet[]; maxPrice: number; currency: string };
+type Facets = { categories: string[]; groups: GroupFacet[]; tags: string[]; maxPrice: number; currency: string };
 
 function haptic(pattern: number | number[]) {
   if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate(pattern);
@@ -76,7 +76,7 @@ export default function DeckPage() {
   /** По какому запросу уже предупреждали, что точного совпадения нет. */
   const looseWarned = useRef<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [facets, setFacets] = useState<Facets>({ categories: [], groups: [], maxPrice: 0, currency: "RUB" });
+  const [facets, setFacets] = useState<Facets>({ categories: [], groups: [], tags: [], maxPrice: 0, currency: "RUB" });
   const [burst, setBurst] = useState<{ id: number; kind: Decision } | null>(null);
   const loadingRef = useRef(false);
   const goalCelebrated = useRef(false);
@@ -278,7 +278,7 @@ export default function DeckPage() {
       <AnimatePresence>
         {!onboarded && <Onboarding onDone={finishOnboarding} />}
         {onboarded && !tasted && facets.categories.length > 0 && (
-          <TasteQuiz categories={facets.categories} onDone={finishTaste} />
+          <TasteQuiz categories={facets.categories} tags={facets.tags} onDone={finishTaste} />
         )}
       </AnimatePresence>
 
