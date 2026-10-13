@@ -13,7 +13,8 @@
     "catalog:images": "node scripts/cache-images.mjs",
     "catalog:prune": "node scripts/prune-images.mjs",
     "catalog:categories": "node scripts/fix-categories.mjs",
-    "catalog:retag": "node scripts/retag-categories.mjs"
+    "catalog:retag": "node scripts/retag-categories.mjs",
+    "catalog:scope": "node scripts/keep-groups.mjs"
   },
   "dependencies": {
     "framer-motion": "^11.11.17",

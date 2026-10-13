@@ -21,6 +21,7 @@ import { call, env, pause, spent, token, AeError } from "./ae-api.mjs";
 import { shortCategory } from "./ae-category.mjs";
 import { categoryByTitle } from "./ae-taxonomy.mjs";
 import { tagsByTitle } from "./ae-tags.mjs";
+import { inScope, scopeLines } from "./ae-scope.mjs";
 
 const args = Object.fromEntries(
   process.argv.slice(2).flatMap((a, i, all) =>
@@ -57,6 +58,18 @@ const QUOTA_SHARE = Number(args.quota ?? env.CATALOG_CATEGORY_SHARE ?? 0.06);
 const LAP_PAGES = Number(args.lap ?? 2);
 /** Склейка одинаковых товаров у разных продавцов. */
 const DEDUP = String(args.dedup ?? env.CATALOG_DEDUP ?? "1") !== "0";
+/**
+ * Границы витрины (`scripts/ae-scope.mjs`): одежда, аксессуары, для дома и
+ * кухня. Отключается `CATALOG_SCOPE=all` — тогда импортёр снова берёт всё
+ * подряд, как раньше.
+ */
+const SCOPE_ON = String(args.scope ?? env.CATALOG_SCOPE ?? "on") !== "all";
+/**
+ * Брать ли товар, которому раздел не достался. По умолчанию нет: неопознанной
+ * приезжает примерно треть всего подряд, и с ней ограничение не ограничивает
+ * ничего. `CATALOG_SCOPE_UNKNOWN=1` возвращает их в каталог.
+ */
+const SCOPE_UNKNOWN = String(env.CATALOG_SCOPE_UNKNOWN ?? "0") === "1";
 
 /**
  * Какие фиды брать. Без флага — все, что отдала площадка; с флагом
@@ -519,12 +532,18 @@ async function main() {
     return;
   }
 
+  if (SCOPE_ON) {
+    console.log(`Границы витрины: ${scopeLines().join("; ")}${SCOPE_UNKNOWN ? "; плюс неопознанные" : ""}`);
+  }
+
   const snapshot = readSnapshot();
   const known = new Map(snapshot.products.map((p) => [p.id, p]));
   const before = known.size;
   let added = 0;
   let skipped = 0;
   let twins = 0;
+  /** Сколько товаров отсеяно границами витрины. */
+  let outside = 0;
   const dumped = [];
 
   /*
@@ -639,6 +658,17 @@ async function main() {
             skipped += 1;
             continue;
           }
+          /*
+           * Границы витрины. Запрос всё равно потрачен — страницу площадка
+           * отдаёт целиком, — но место на диске и в памяти тратить незачем, а
+           * главное: иначе каталог заново набирается тем, что вчера удалили.
+           * Фид, из которого всё уходит в отказ, сам притихнет и будет
+           * отложен — обход перестанет его перечитывать.
+           */
+          if (SCOPE_ON && !inScope(product, { keepUnknown: SCOPE_UNKNOWN })) {
+            outside += 1;
+            continue;
+          }
 
           const print = DEDUP ? fingerprint(product) : null;
           const rivalId = print ? byPrint.get(print) : undefined;
@@ -732,6 +762,7 @@ async function main() {
   console.log(
     `Готово: было ${before}, стало ${products.length} (+${added}). ` +
       (skipped ? `Без картинки или цены пропущено ${skipped}. ` : "") +
+      (outside ? `Вне границ витрины пропущено ${outside}. ` : "") +
       (twins ? `Склеено дублей: ${twins}. ` : "") +
       `Потрачено запросов: ${spent.calls}, за сутки ${ledger.used + spent.calls} из ${DAILY_BUDGET}.`,
   );
