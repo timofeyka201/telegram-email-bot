@@ -31,7 +31,11 @@ export default function FilterSheet({ open, onClose, categories, maxPrice, curre
   const ceil = Math.max(1, Math.ceil(maxPrice));
   const price = draft.maxPrice ?? ceil;
   const active =
-    (draft.categories ?? []).length + (draft.maxPrice !== undefined ? 1 : 0) + (draft.onlyDiscount ? 1 : 0) + (text.trim() ? 1 : 0);
+    (draft.categories ?? []).length +
+    (draft.group ? 1 : 0) +
+    (draft.maxPrice !== undefined ? 1 : 0) +
+    (draft.onlyDiscount ? 1 : 0) +
+    (text.trim() ? 1 : 0);
 
   const apply = () => {
     onApply(draft, text.trim());

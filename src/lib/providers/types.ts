@@ -1,8 +1,13 @@
 import type { TasteHint } from "../taste";
 import type { Product } from "../types";
 
+/** Раздел витрины и категории внутри него — для строки разделов в шапке. */
+export type GroupFacet = { title: string; categories: string[] };
+
 /** Ограничения витрины, которые пользователь задаёт в панели фильтров. */
 export type Filters = {
+  /** раздел витрины: «Женская одежда», «Электроника» — верхний уровень */
+  group?: string;
   categories?: string[];
   maxPrice?: number;
   onlyDiscount?: boolean;

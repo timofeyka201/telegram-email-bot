@@ -15,7 +15,7 @@ type Body = {
   query?: string;
   cursor?: string | null;
   seed?: number;
-  filters?: { categories?: string[]; maxPrice?: number; onlyDiscount?: boolean };
+  filters?: { group?: string; categories?: string[]; maxPrice?: number; onlyDiscount?: boolean };
   hint?: TasteHint;
 };
 

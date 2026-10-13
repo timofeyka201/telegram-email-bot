@@ -1,10 +1,10 @@
 import { catalogCategories, catalogInfo, catalogProducts } from "../catalog";
-import { categoryLabel } from "../categories";
+import { categoryLabel, groupLabel } from "../categories";
 import type { Product } from "../types";
 import { toRub } from "../money";
 import type { TasteHint } from "../taste";
 import { searchCatalog } from "../search";
-import { decodeCursor, encodeCursor, mulberry32, shuffle, type Filters, type PageArgs, type Provider, type ProviderPage } from "./types";
+import { decodeCursor, encodeCursor, mulberry32, shuffle, type Filters, type GroupFacet, type PageArgs, type Provider, type ProviderPage } from "./types";
 
 /**
  * Собственная база товаров: файл data/catalog.json, который отдаётся
@@ -87,14 +87,46 @@ export function currentPrices(ids: string[]): Record<string, number> {
 }
 
 /**
- * Диапазон цен и список категорий для панели фильтров. Пересчитываются вместе
- * со снапшотом: прежние константы вычислялись один раз при запуске и после
- * обновления каталога показывали бы вчерашние категории.
+ * Разделы с их категориями. Тридцать с лишним категорий плоской строкой —
+ * это свиток, по которому надо скроллить до «Купальников»; с разделом
+ * сверху до них два тапа: «Женская одежда» → «Купальники».
+ *
+ * Пустые разделы в строку не попадают, иначе человек нажимает на раздел и
+ * оказывается в пустоте.
  */
-export function facets(): { categories: string[]; maxPrice: number; currency: string } {
+function buildGroupFacets(all: Product[]): GroupFacet[] {
+  const counts = new Map<string, Map<string, number>>();
+  for (const p of all) {
+    if (!p.category) continue;
+    const group = groupLabel(p);
+    if (!counts.has(group)) counts.set(group, new Map());
+    const inside = counts.get(group)!;
+    const label = categoryLabel(p.category);
+    inside.set(label, (inside.get(label) ?? 0) + 1);
+  }
+
+  const size = (inside: Map<string, number>) => [...inside.values()].reduce((a, b) => a + b, 0);
+  return [...counts.entries()]
+    .filter(([, inside]) => size(inside) >= 2)
+    .sort((a, b) => size(b[1]) - size(a[1]) || a[0].localeCompare(b[0], "ru"))
+    .map(([title, inside]) => ({
+      title,
+      categories: [...inside.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ru"))
+        .map(([label]) => label),
+    }));
+}
+
+/**
+ * Диапазон цен, разделы и список категорий для панели фильтров.
+ * Пересчитываются вместе со снапшотом: прежние константы вычислялись один раз
+ * при запуске и после обновления каталога показывали бы вчерашние категории.
+ */
+export function facets(): { categories: string[]; groups: GroupFacet[]; maxPrice: number; currency: string } {
   const all = catalogProducts();
   return {
     categories: buildCategoryFacets(all),
+    groups: buildGroupFacets(all),
     maxPrice: all.reduce((max, p) => (p.price !== undefined && p.price > max ? p.price : max), 0),
     currency: all[0]?.currency ?? "RUB",
   };
@@ -108,6 +140,7 @@ export function meta(): { kind: string; generatedAt: string | null; total: numbe
 /** Фильтры применяются к своей базе — у неё есть и категории, и цены. */
 function passes(p: Product, f?: Filters): boolean {
   if (!f) return true;
+  if (f.group && groupLabel(p) !== f.group) return false;
   // В фильтре лежат ярлыки, а не слаги — так совпадают синонимы из разных источников.
   if (f.categories?.length && (!p.category || !f.categories.includes(categoryLabel(p.category)))) return false;
   if (f.maxPrice !== undefined && (p.price === undefined || p.price > f.maxPrice)) return false;

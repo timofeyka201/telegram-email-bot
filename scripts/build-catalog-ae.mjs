@@ -19,6 +19,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { call, env, pause, spent, token, AeError } from "./ae-api.mjs";
 import { shortCategory } from "./ae-category.mjs";
+import { categoryByTitle } from "./ae-taxonomy.mjs";
 
 const args = Object.fromEntries(
   process.argv.slice(2).flatMap((a, i, all) =>
@@ -181,9 +182,18 @@ function toProduct(row, feedTitle) {
   const link = pick(a, "pageURL", "productUrl", "link", "url", "productDetailUrl");
   const storeName = pick(a, "store.title", "store.name", "storeName", "shopName", "seller.name");
 
+  const title = String(pick(a, "title", "productTitle", "name", "subject") ?? "").slice(0, 200);
+  /*
+   * Категорию площадка не присылает — её приходится брать из ящика, в котором
+   * товар лежал. Но название надёжнее ящика: платье из фида «Дом и сад» это
+   * всё-таки платье. Поэтому сперва пробуем определить по названию, а фид
+   * остаётся запасным вариантом для того, о чём название промолчало.
+   */
+  const tag = categoryByTitle(title);
+
   return {
     id: `ae-${id}`,
-    title: String(pick(a, "title", "productTitle", "name", "subject") ?? "").slice(0, 200),
+    title,
     description: String(pick(a, "description", "shortDescription") ?? "").slice(0, 4000),
     url: String(link ?? `https://aliexpress.ru/item/${id}.html`),
     images: images(a),
@@ -191,7 +201,8 @@ function toProduct(row, feedTitle) {
     // «Было» показываем только если оно и правда больше текущей цены.
     priceMax: was !== undefined && price !== undefined && was > price ? was : undefined,
     currency: String(pick(a, "price.currency", "currency", "currencyCode") ?? "RUB"),
-    category: shortCategory(feedTitle),
+    category: tag?.category ?? shortCategory(feedTitle),
+    group: tag?.parent,
     brand: pick(a, "brand", "brandName") ?? undefined,
     // Рейтинг у площадки по пятибалльной шкале; сотенную встречаем на всякий случай.
     rating: rating !== undefined && rating > 5 ? rating / 20 : rating,
@@ -698,6 +709,7 @@ async function main() {
     kind: "ae",
     generatedAt: new Date().toISOString(),
     categories: [...new Set(products.map((p) => p.category).filter(Boolean))],
+    groups: [...new Set(products.map((p) => p.group).filter(Boolean))],
     products,
   });
   writeLedger({

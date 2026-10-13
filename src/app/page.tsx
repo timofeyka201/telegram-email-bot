@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FilterSheet from "@/components/FilterSheet";
 import Onboarding from "@/components/Onboarding";
 import PriceDrops from "@/components/PriceDrops";
@@ -18,6 +18,7 @@ import { loadNextPage } from "@/lib/feed";
 import { plural } from "@/lib/money";
 import { DAILY_GOAL, useHydrated, useStore, type Decision } from "@/lib/store";
 import type { ExitWay } from "@/components/SwipeCard";
+import type { GroupFacet } from "@/lib/providers/types";
 import type { Product } from "@/lib/types";
 
 const VISIBLE = 3;
@@ -28,7 +29,7 @@ const PREFETCH_AT = 8;
 /** Сколько первых свайпов подсвечивать зоны тапа. */
 const HINT_SWIPES = 3;
 
-type Facets = { categories: string[]; maxPrice: number; currency: string };
+type Facets = { categories: string[]; groups: GroupFacet[]; maxPrice: number; currency: string };
 
 function haptic(pattern: number | number[]) {
   if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate(pattern);
@@ -75,7 +76,7 @@ export default function DeckPage() {
   /** По какому запросу уже предупреждали, что точного совпадения нет. */
   const looseWarned = useRef<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [facets, setFacets] = useState<Facets>({ categories: [], maxPrice: 0, currency: "RUB" });
+  const [facets, setFacets] = useState<Facets>({ categories: [], groups: [], maxPrice: 0, currency: "RUB" });
   const [burst, setBurst] = useState<{ id: number; kind: Decision } | null>(null);
   const loadingRef = useRef(false);
   const goalCelebrated = useRef(false);
@@ -219,6 +220,33 @@ export default function DeckPage() {
     }
   }, [stats.daySwipes]);
 
+  const group = filters.group ?? null;
+
+  /**
+   * Что показывать второй ступенью: категории выбранного раздела, а пока
+   * раздел не выбран — самые полные категории витрины. Тот же список уходит и
+   * в шторку фильтров: выбрать там категорию, которой в разделе нет, значит
+   * получить пустую ленту.
+   */
+  const groupCategories = useMemo(
+    () => (group ? (facets.groups.find((g) => g.title === group)?.categories ?? []) : facets.categories),
+    [group, facets],
+  );
+
+  const pickGroup = (g: string | null) => {
+    /*
+     * Категория живёт внутри раздела, поэтому уходит вместе с ним: иначе
+     * «Купальники», выбранные в женской одежде, остаются включёнными и после
+     * возврата ко всем разделам — в строке их уже не видно, а лента по-
+     * прежнему показывает одни купальники.
+     */
+    const inside = g ? (facets.groups.find((x) => x.title === g)?.categories ?? []) : [];
+    const categories = (filters.categories ?? []).filter((c) => inside.includes(c));
+    setFilters({ ...filters, group: g ?? undefined, categories });
+    setFeedError(null);
+    setSearch(null);
+  };
+
   const toggleCategory = (c: string) => {
     const list = filters.categories ?? [];
     setFilters({ ...filters, categories: list.includes(c) ? list.filter((x) => x !== c) : [...list, c] });
@@ -242,7 +270,8 @@ export default function DeckPage() {
     );
   }
 
-  const extraFilters = (filters.maxPrice !== undefined ? 1 : 0) + (filters.onlyDiscount ? 1 : 0) + (query ? 1 : 0);
+  const extraFilters =
+    (filters.maxPrice !== undefined ? 1 : 0) + (filters.onlyDiscount ? 1 : 0) + (query ? 1 : 0) + (group ? 1 : 0);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -254,10 +283,13 @@ export default function DeckPage() {
       </AnimatePresence>
 
       <TopBar
-        categories={facets.categories}
+        groups={facets.groups}
+        group={group}
+        categories={groupCategories}
         active={filters.categories ?? []}
         extraFilters={extraFilters}
         query={query}
+        onPickGroup={pickGroup}
         onToggleCategory={toggleCategory}
         onOpenFilters={() => setFiltersOpen(true)}
         onClearQuery={() => applyFilters(filters, "")}
@@ -339,7 +371,7 @@ export default function DeckPage() {
       <FilterSheet
         open={filtersOpen}
         onClose={() => setFiltersOpen(false)}
-        categories={facets.categories}
+        categories={groupCategories}
         maxPrice={facets.maxPrice}
         currency={facets.currency}
         value={filters}

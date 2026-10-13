@@ -73,3 +73,16 @@ export function rankCategories(products: { category?: string }[]): string[] {
   }
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c);
 }
+
+/**
+ * Раздел, в который входит категория: «Женская одежда», «Электроника», «Дом».
+ * Раскладывает товары по разделам импортёр (`scripts/ae-taxonomy.mjs`), и для
+ * части каталога раздел не определён — название товара ни о чём не сказало.
+ * Такие карточки собираются в «Остальное», иначе до них не добраться строкой
+ * разделов, и человек решит, что половина витрины куда-то пропала.
+ */
+export const OTHER_GROUP = "Остальное";
+
+export function groupLabel(p: { group?: string }): string {
+  return p.group?.trim() || OTHER_GROUP;
+}
