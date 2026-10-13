@@ -4,7 +4,9 @@
  *
  * Сейчас категория достаётся товару от фида, в котором он лежал: платье из
  * фида «Дом и сад» так и подписано «Дом и сад». Этот скрипт смотрит на само
- * название и предлагает категорию по нему.
+ * название и предлагает категорию по нему — и раздел, в который эта
+ * категория входит: «Купальники» попадают в «Женскую одежду», футболка с
+ * «мужская» в названии — в «Мужскую».
  *
  * По умолчанию ничего не меняет — только показывает, что получилось бы:
  *
@@ -54,33 +56,57 @@ function main() {
   );
   console.log("");
 
-  const counts = new Map();
+  /** Раздел → категория → сколько карточек. */
+  const tree = new Map();
   const examples = new Map();
+  const kept = new Map();
   const moved = new Map();
-  let kept = 0;
+  let keptTotal = 0;
   let changed = 0;
 
   for (const p of products) {
     const next = categoryByTitle(p.title);
     if (!next) {
-      kept += 1;
-      counts.set(`${p.category ?? "без категории"} (как было)`, (counts.get(`${p.category ?? "без категории"} (как было)`) ?? 0) + 1);
+      keptTotal += 1;
+      const was = p.category ?? "без категории";
+      kept.set(was, (kept.get(was) ?? 0) + 1);
       continue;
     }
-    changed += next === p.category ? 0 : 1;
-    counts.set(next, (counts.get(next) ?? 0) + 1);
-    if (!examples.has(next)) examples.set(next, []);
-    const bag = examples.get(next);
+    const { category, parent } = next;
+    changed += category === p.category ? 0 : 1;
+    if (!tree.has(parent)) tree.set(parent, new Map());
+    const branch = tree.get(parent);
+    branch.set(category, (branch.get(category) ?? 0) + 1);
+    const key = `${parent}/${category}`;
+    if (!examples.has(key)) examples.set(key, []);
+    const bag = examples.get(key);
     if (bag.length < SAMPLES) bag.push(`${p.category ?? "—"} → ${p.title.slice(0, 64)}`);
-    const pair = `${p.category ?? "—"} → ${next}`;
+    const pair = `${p.category ?? "—"} → ${parent} / ${category}`;
     moved.set(pair, (moved.get(pair) ?? 0) + 1);
-    if (APPLY) p.category = next;
+    if (APPLY) {
+      p.category = category;
+      p.group = parent;
+    }
   }
 
+  const total = (branch) => [...branch.values()].reduce((a, b) => a + b, 0);
+
   console.log("ЧТО ПОЛУЧИЛОСЬ");
-  for (const [category, n] of [...counts.entries()].sort((a, b) => b[1] - a[1])) {
-    console.log(`  ${pad(n, 6)} ${category}`);
-    for (const line of examples.get(category) ?? []) console.log(`         ${line}`);
+  for (const [parent, branch] of [...tree.entries()].sort((a, b) => total(b[1]) - total(a[1]))) {
+    console.log("");
+    console.log(`  ${pad(total(branch), 6)} ${parent.toUpperCase()}`);
+    for (const [category, n] of [...branch.entries()].sort((a, b) => b[1] - a[1])) {
+      console.log(`      ${pad(n, 6)} ${category}`);
+      for (const line of examples.get(`${parent}/${category}`) ?? []) console.log(`               ${line}`);
+    }
+  }
+
+  if (kept.size) {
+    console.log("");
+    console.log("ОСТАЛОСЬ КАК БЫЛО (название ни о чём не сказало)");
+    for (const [category, n] of [...kept.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15)) {
+      console.log(`  ${pad(n, 6)} ${category}`);
+    }
   }
 
   console.log("");
@@ -89,11 +115,11 @@ function main() {
     console.log(`  ${pad(n, 6)} ${pair}`);
   }
 
-  const matched = products.length - kept;
+  const matched = products.length - keptTotal;
   console.log("");
   console.log(
     `Итог: по названию определилось ${matched} из ${products.length} (${Math.round((matched / products.length) * 100)}%), ` +
-      `сменили категорию ${changed}, осталось как было ${kept}.`,
+      `сменили категорию ${changed}, осталось как было ${keptTotal}.`,
   );
 
   if (!APPLY) {
@@ -103,6 +129,7 @@ function main() {
   }
 
   file.categories = [...new Set((file.products ?? []).map((p) => p.category).filter(Boolean))];
+  file.groups = [...new Set((file.products ?? []).map((p) => p.group).filter(Boolean))];
   mkdirSync(dirname(FILE), { recursive: true });
   const tmp = `${FILE}.tmp`;
   writeFileSync(tmp, JSON.stringify(file));

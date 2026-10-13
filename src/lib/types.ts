@@ -55,6 +55,8 @@ export type Product = {
   reviews: Review[];
   /** категория и бренд — для фильтров в собственной базе */
   category?: string;
+  /** раздел, в который входит категория: «Женская одежда», «Электроника» */
+  group?: string;
   brand?: string;
   /** ISO-код валюты цены: CNY у 1688, USD у открытого каталога, RUB у своей базы */
   currency: string;
