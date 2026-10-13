@@ -71,7 +71,7 @@ export default function DeckPage() {
   const [sheet, setSheet] = useState<Product | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
-  /** Итог поиска: сколько нашлось и показано ли уже всё. */
+  /** Итог поиска или фильтра: сколько нашлось и показано ли уже всё. */
   const [search, setSearch] = useState<{ total: number } | null>(null);
   /** По какому запросу уже предупреждали, что точного совпадения нет. */
   const looseWarned = useRef<string | null>(null);
@@ -408,6 +408,53 @@ function Interlude({
   onClearFilters: () => void;
   onOpenSearch: () => void;
 }) {
+  if (search && !query && hasFilters) {
+    /*
+     * Фильтр конечен: «Купальники» в каталоге рано или поздно кончаются.
+     * Раньше в этот момент витрина молча показывала всё подряд, не снимая
+     * подсветку с фильтра, — человек свайпал дрели, выбрав купальники.
+     */
+    const nothing = search.total === 0;
+    return (
+      <div className="card-shadow absolute inset-0 flex flex-col items-center justify-center gap-4 rounded-[var(--radius-card)] bg-[var(--color-surface)] px-8 text-center">
+        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-[var(--color-muted)]">
+          <IconSliders className="h-7 w-7" />
+        </span>
+        <div>
+          <h2 className="font-display text-[19px] font-bold">
+            {nothing ? "Под фильтр ничего не подошло" : "Это всё по фильтру"}
+          </h2>
+          <p className="mt-1.5 text-[14px] leading-snug text-[var(--color-muted)]">
+            {nothing ? (
+              <>На витрине нет карточек с такими условиями. Снимите часть фильтров — лента вернётся.</>
+            ) : (
+              <>
+                По фильтру {search.total.toLocaleString("ru-RU")}{" "}
+                {plural(search.total, "карточка", "карточки", "карточек")} — вы посмотрели все.
+              </>
+            )}
+          </p>
+        </div>
+        <div className="flex w-full flex-col gap-2">
+          <button
+            type="button"
+            onClick={onClearFilters}
+            className="brand-gradient rounded-full py-3.5 text-[15px] font-bold"
+          >
+            Вернуться ко всей витрине
+          </button>
+          <button
+            type="button"
+            onClick={onOpenSearch}
+            className="flex items-center justify-center gap-2 rounded-2xl bg-[var(--color-surface-2)] py-3.5 text-[15px] font-semibold"
+          >
+            <IconSliders className="h-5 w-5" /> Изменить фильтры
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (search && query) {
     const nothing = search.total === 0;
     return (

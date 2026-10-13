@@ -1,5 +1,6 @@
 "use client";
 
+import { baseId } from "./ids";
 import { useStore } from "./store";
 import { toHint } from "./taste";
 import type { FeedPage } from "./types";
@@ -47,7 +48,8 @@ export function loadNextPage(): Promise<FeedResult> {
         // Исключаем всё, что уже показывали: и отвергнутое, и просто
         // просмотренное. Иначе после перезапуска сессии витрина начинает
         // предлагать по второму разу то, что человек уже видел.
-        const hint = toHint(taste, [...new Set([...seen, ...rejected])], rates);
+        // Суффикс круга отбрасываем: исключать надо товар, а не карточку.
+        const hint = toHint(taste, [...new Set([...seen, ...rejected].map(baseId))], rates);
 
         const res = await fetch("/api/feed", {
           method: "POST",

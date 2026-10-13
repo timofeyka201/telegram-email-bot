@@ -1,5 +1,6 @@
 import { catalogCategories, catalogInfo, catalogProducts } from "../catalog";
 import { categoryLabel, groupLabel } from "../categories";
+import { baseId } from "../ids";
 import type { Product } from "../types";
 import { toRub } from "../money";
 import type { TasteHint } from "../taste";
@@ -79,7 +80,7 @@ export function currentPrices(ids: string[]): Record<string, number> {
   const byId = new Map(catalogProducts().map((p) => [p.id, p]));
   const out: Record<string, number> = {};
   for (const id of ids) {
-    const base = id.replace(/-r\d+$/, "");
+    const base = baseId(id);
     const price = byId.get(base)?.price;
     if (price !== undefined) out[id] = price;
   }
@@ -249,7 +250,8 @@ export const localProvider: Provider = {
     if (!all.length) return { products: [], cursor: encodeCursor(0, round), looped: false };
 
     // Отвергнутое исключаем жёстко: свайп влево — это «больше не показывай».
-    const banned = new Set(hint?.exclude ?? []);
+    // Приходить могут и карточки с суффиксом круга — сверяем по товару.
+    const banned = new Set((hint?.exclude ?? []).map(baseId));
 
     /*
      * Поиск идёт отдельной дорогой.
@@ -281,17 +283,32 @@ export const localProvider: Provider = {
     const pool = Math.max(PAGE * 3, Math.min(POOL, Math.floor(all.length / 12)));
 
     /** Отбор подряд с места остановки: что набрали и докуда дошли. */
-    const collect = (list: Product[], from: number, strict: boolean) => {
+    const collect = (list: Product[], from: number, skip: Set<string>) => {
       const found: Product[] = [];
       let i = from;
       for (; i < list.length && found.length < pool; i++) {
         const p = list[i];
-        if (banned.has(p.id)) continue;
-        if (strict && !passes(p, filters)) continue;
+        if (skip.has(p.id)) continue;
+        if (!passes(p, filters)) continue;
         found.push(p);
       }
       return { found, next: i };
     };
+
+    /**
+     * Фильтр конечен, витрина — нет.
+     *
+     * Раньше, когда под фильтр в очередном окне ничего не попадало, лента
+     * показывала витрину целиком: «ничего не подошло — вот вам всё». Фильтр
+     * при этом не снимался и оставался подсвеченным, так что человек, выбрав
+     * «Купальники», через десяток свайпов смотрел дрели, а заодно и те же
+     * карточки по второму кругу. Теперь фильтр не подменяется: когда
+     * подходящее кончилось, так и говорим.
+     */
+    const narrowed = !!(
+      filters &&
+      (filters.group || filters.categories?.length || filters.maxPrice !== undefined || filters.onlyDiscount)
+    );
 
     /**
      * Порядок карточек фиксирован на круг: он зависит только от снапшота и
@@ -310,14 +327,42 @@ export const localProvider: Provider = {
     // Круг текущий, а если он пройден до конца — следующий: каталог конечен,
     // а лента не должна заканчиваться. Суффикс круга не даёт идентификаторам
     // совпасть с уже показанными.
-    for (let r = round, from = offset, pass = 0; pass < 2; pass++, r += 1, from = 0) {
+    /*
+     * Попытки по очереди: остаток круга, затем следующий круг с начала, а
+     * для витрины без фильтров — тот же круг, но с памятью только о
+     * последних карточках.
+     *
+     * Последняя попытка нужна каталогу, который человек просмотрел целиком:
+     * запасной каталог — это две с половиной сотни карточек, и без неё лента
+     * просто обрывалась бы с «источник не ответил». Отвергнутое при этом
+     * возвращается — но только когда на витрине не осталось вообще ничего
+     * другого, и показать то же самое честнее, чем пустой экран.
+     */
+    const recent = new Set((hint?.exclude ?? []).slice(0, PAGE * 3).map(baseId));
+    const attempts = [
+      { r: round, from: offset, skip: banned },
+      { r: round + 1, from: 0, skip: banned },
+      ...(narrowed ? [] : [{ r: round + 1, from: 0, skip: recent }]),
+    ];
+
+    for (const { r, from, skip } of attempts) {
       const ordered = shuffle(all, seed + r * 104729);
-      let { found, next } = collect(ordered, from, true);
-      // Под фильтры не подошло ничего: показываем витрину целиком, а не
-      // пустой экран. С поиском так делать нельзя — там это была бы подмена
-      // выдачи, — а фильтры человек видит и может снять.
-      if (!found.length) ({ found, next } = collect(ordered, from, false));
-      if (!found.length) continue;
+      const { found, next } = collect(ordered, from, skip);
+      if (!found.length) {
+        // Круги — для всей витрины: она бесконечна по обещанию. Под фильтром
+        // ходить по кругу незачем — это те же карточки с новыми
+        // идентификаторами; честнее сказать, что показали всё.
+        if (narrowed) {
+          return {
+            products: [],
+            cursor: encodeCursor(offset, round),
+            looped: false,
+            noMore: true,
+            total: all.filter((p) => passes(p, filters)).length,
+          };
+        }
+        continue;
+      }
 
       const rnd = mulberry32(seed + r * 104729 + from);
       const picked = hint ? pick(found, hint, rnd) : found.slice(0, PAGE);

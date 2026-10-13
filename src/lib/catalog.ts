@@ -1,6 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import bundled from "../../data/catalog.json";
+import { baseId } from "./ids";
 import type { Product } from "./types";
 
 export type CatalogFile = {
@@ -117,5 +118,5 @@ export function productById(id: string): Product | undefined {
   const all = catalogProducts();
   if (index?.source !== all) index = { source: all, byId: new Map(all.map((p) => [p.id, p])) };
   // Суффикс круга («-r1») указывает на тот же товар.
-  return index.byId.get(id.replace(/-r\d+$/, ""));
+  return index.byId.get(baseId(id));
 }

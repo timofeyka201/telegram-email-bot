@@ -71,6 +71,23 @@ export async function POST(req: NextRequest) {
     const cursor = provider.id === requested.id ? (body.cursor ?? null) : null;
     try {
       const page = await provider.page({ query, cursor, seed, filters: body.filters, hint: body.hint });
+      /*
+       * «Под фильтром показали всё» — это ответ витрины, а не её молчание.
+       * Если пойти дальше по цепочке, следом ответит офлайн-подборка, и
+       * человек получит дюжину чужих карточек вместо честного «это всё».
+       */
+      if (!page.products.length && page.noMore) {
+        const done: FeedPage = {
+          products: [],
+          cursor: page.cursor,
+          provider: provider.id,
+          providerLabel: provider.label,
+          looped: false,
+          total: page.total,
+          noMore: true,
+        };
+        return NextResponse.json(done);
+      }
       if (!page.products.length) {
         // Поиск, не нашедший ничего, — это ответ, а не сбой источника.
         // Раньше он попадал в ту же корзину, что упавшее API, и человек

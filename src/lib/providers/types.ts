@@ -36,6 +36,8 @@ export type ProviderPage = {
   total?: number;
   /** нашлось только по части слов запроса */
   loose?: boolean;
+  /** по запросу или фильтру показано всё: следующей страницы не будет */
+  noMore?: boolean;
 };
 
 export type Provider = {

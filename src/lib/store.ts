@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import { baseId, sameProduct } from "./ids";
 import { DEFAULT_RATES, toRub } from "./money";
 import { emptySizes, type SizeProfile } from "./sizes";
 import { decay, emptyTaste, learn, learnReason, learnVisit, unlearn, type RejectReason, type Taste } from "./taste";
@@ -252,8 +253,15 @@ export const useStore = create<State>()(
 
       appendPage: (products, cursor, provider, providerLabel) =>
         set((s) => {
-          const known = new Set([...s.deck.map((p) => p.id), ...s.seen, ...s.rejected]);
-          const fresh = products.filter((p) => !known.has(p.id));
+          /*
+           * Сверяем товары, а не карточки: на втором круге тот же товар
+           * приезжает с суффиксом («ae-123-r1»), и по идентификатору он
+           * выглядит новым. В колоде из-за этого оказывались две одинаковые
+           * карточки подряд, а отмена возвращала «ту же самую» — она и была
+           * та же, просто из другого круга.
+           */
+          const known = new Set([...s.deck.map((p) => baseId(p.id)), ...s.seen.map(baseId), ...s.rejected.map(baseId)]);
+          const fresh = products.filter((p) => !known.has(baseId(p.id)));
           return { deck: [...s.deck, ...fresh], cursor, provider, providerLabel };
         }),
 
@@ -294,7 +302,13 @@ export const useStore = create<State>()(
         }
 
         // Отказ — сигнал сильнее лайка: товар больше не показываем никогда.
-        const rejected = decision === "dislike" ? [product.id, ...s.rejected].slice(0, 2000) : s.rejected;
+        /*
+         * Запоминаем товар, а не карточку: с суффиксом круга («-r1») список
+         * показанного переставал работать ровно тогда, когда он нужнее
+         * всего — на втором круге. Сервер исключал «ae-123», а приезжало
+         * «ae-123-r1», и витрина шла по третьему кругу теми же товарами.
+         */
+        const rejected = decision === "dislike" ? [baseId(product.id), ...s.rejected].slice(0, 2000) : s.rejected;
 
         let dislikesSinceAsk = s.dislikesSinceAsk;
         let pendingReason = s.pendingReason;
@@ -315,7 +329,7 @@ export const useStore = create<State>()(
           rejected,
           dislikesSinceAsk,
           pendingReason,
-          seen: [product.id, ...s.seen].slice(0, 800),
+          seen: [baseId(product.id), ...s.seen].slice(0, 800),
           history: [{ product, decision }, ...s.history].slice(0, 30),
           stats,
           taste: learn(s.taste, product, decision),
@@ -338,8 +352,13 @@ export const useStore = create<State>()(
         set((s) => {
           const [last, ...rest] = s.history;
           if (!last) return s;
-          const inDeck = s.index > 0 && s.deck[s.index - 1]?.id === last.product.id;
-          const deck = inDeck ? s.deck : [last.product, ...s.deck.slice(s.index)];
+          const inDeck = s.index > 0 && sameProduct(s.deck[s.index - 1]?.id ?? "", last.product.id);
+          // Возвращая карточку, убираем копии того же товара из того, что
+          // впереди: в колодах, собранных до починки, они ещё лежат, и без
+          // этого человек увидит один и тот же товар дважды подряд.
+          const deck = inDeck
+            ? s.deck
+            : [last.product, ...s.deck.slice(s.index).filter((p) => !sameProduct(p.id, last.product.id))];
           const index = inDeck ? s.index - 1 : 0;
           const stats = { ...s.stats };
           stats.swipes = Math.max(0, stats.swipes - 1);
@@ -354,8 +373,8 @@ export const useStore = create<State>()(
             history: rest,
             liked: last.decision === "dislike" ? s.liked : s.liked.filter((p) => p.id !== last.product.id),
             cart: last.decision === "super" ? s.cart.filter((c) => c.product.id !== last.product.id) : s.cart,
-            seen: s.seen.filter((id) => id !== last.product.id),
-            rejected: s.rejected.filter((id) => id !== last.product.id),
+            seen: s.seen.filter((id) => !sameProduct(id, last.product.id)),
+            rejected: s.rejected.filter((id) => !sameProduct(id, last.product.id)),
             // Отменённое решение снимается ровно в том весе, в каком было
             // начислено, а не противоположным свайпом.
             taste: unlearn(s.taste, last.product, last.decision),
