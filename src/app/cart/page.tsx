@@ -179,7 +179,7 @@ export default function CartPage() {
                   Скопировать заказ
                 </button>
                 <a
-                  href={cart[0] ? shopUrl(cart[0].product) : undefined}
+                  href={cart[0] ? shopUrl(cart[0].product, "cart") : undefined}
                   target="_blank"
                   rel="noreferrer noopener"
                   onClick={() => cart[0] && noteOrder(cart[0].product)}

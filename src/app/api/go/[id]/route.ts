@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { catalogProducts } from "@/lib/catalog";
 import { affiliateLink, noteClick } from "@/lib/ae/links";
+import { logEvent } from "@/lib/stats/events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,8 +16,10 @@ export const dynamic = "force-dynamic";
  * товар. Потерянная комиссия — неприятность, тупик вместо магазина — потеря
  * покупателя.
  */
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // Откуда ушли: из ленты, из избранного, из корзины, со страницы товара.
+  const from = new URL(req.url).searchParams.get("from")?.slice(0, 16) || "unknown";
 
   // Идентификаторы с суффиксом круга («-r1») указывают на тот же товар.
   const base = id.replace(/-r\d+$/, "");
@@ -36,6 +39,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const creative = await affiliateLink(base, url, product?.title ?? `Товар ${itemId}`);
   await noteClick(base, creative ? "affiliate" : "direct");
+  // Переход — самая денежная метрика витрины, поэтому он попадает и в журнал
+  // событий: там он лежит рядом со свайпами и считается вместе с ними.
+  await logEvent("shop", {
+    product: base,
+    from,
+    category: product?.category,
+    group: product?.group,
+    price: product?.price,
+    affiliate: !!creative,
+  });
 
   return NextResponse.redirect(creative?.target ?? url, {
     status: 302,

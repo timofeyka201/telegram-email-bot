@@ -1,6 +1,7 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { NextResponse } from "next/server";
+import { logEvent } from "@/lib/stats/events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -73,6 +74,24 @@ async function record(url: URL): Promise<NextResponse> {
     // Площадке отвечаем успехом: повторять ей нечего, а разбираться с диском
     // будем сами по логу службы.
   }
+
+  /*
+   * То же самое — в журнал событий: заказ там встаёт рядом с переходами и
+   * свайпами, и выручка считается теми же сутками, что и всё остальное.
+   * Сырой постбэк при этом остаётся в своём логе — он первоисточник.
+   */
+  const money = (v?: string) => {
+    const n = Number(String(v ?? "").replace(",", "."));
+    return Number.isFinite(n) ? n : undefined;
+  };
+  await logEvent("order", {
+    order: row.order ?? row.order_number,
+    status: row.status ?? row.order_status,
+    product: row.product ?? row.product_id,
+    price: money(row.price),
+    commission: money(row.commission ?? row.commission_user),
+  });
+
   return NextResponse.json({ ok: true });
 }
 

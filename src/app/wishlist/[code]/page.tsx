@@ -12,6 +12,7 @@ import { useHydrated, useStore } from "@/lib/store";
 import { formatNative, formatRub, needsConversion, plural } from "@/lib/money";
 import { loadFriendWishlist, toggleReserve } from "@/lib/wish/client";
 import { formatCode, normalizeCode, type FriendItem, type FriendView } from "@/lib/wish/types";
+import TrackView from "@/components/TrackView";
 
 /**
  * Чужой список желаний. Главное здесь — бронь: она существует ровно для того,
@@ -76,6 +77,7 @@ export default function FriendWishlistPage() {
 
   return (
     <div className="flex flex-1 flex-col">
+      <TrackView kind="gift" />
       <header className="safe-top sticky top-0 z-30 bg-[var(--color-bg)]/92 px-4 pb-3 pt-3 backdrop-blur-md">
         <div className="flex items-center gap-2">
           <Link
@@ -167,7 +169,7 @@ function GiftCard({
    * перехода, и покупка не засчитывалась ни комиссией, ни статистикой.
    * У желания, добавленного руками, своя ссылка — её и оставляем.
    */
-  const link = item.product ? shopUrl(item.product) : item.url;
+  const link = item.product ? shopUrl(item.product, "gift") : item.url;
 
   return (
     <div

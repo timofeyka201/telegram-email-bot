@@ -258,7 +258,7 @@ function Sheet({ product, onClose }: { product: Product; onClose: () => void }) 
           </div>
 
           <a
-            href={shopUrl(full)}
+            href={shopUrl(full, "deck")}
             target="_blank"
             rel="noreferrer noopener"
             // Уход в магазин — единственное, что похоже на заказ: оформление

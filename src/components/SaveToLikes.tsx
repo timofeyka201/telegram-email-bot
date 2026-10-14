@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { IconCheck, IconHeart } from "./Icons";
 import { toast } from "./Toast";
+import { track } from "@/lib/stat";
 import { useHydrated, useStore } from "@/lib/store";
 import type { Product } from "@/lib/types";
 
@@ -27,6 +28,7 @@ export default function SaveToLikes({ product }: { product: Product }) {
       type="button"
       onClick={() => {
         setTouched(true);
+        track("save", { kind: "like", action: saved ? "remove" : "add", from: "item" });
         if (saved) {
           unlike(product.id);
           toast("Убрали из избранного");

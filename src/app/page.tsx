@@ -15,6 +15,7 @@ import TopBar from "@/components/TopBar";
 import { IconCart, IconHeart, IconSearch, IconSliders } from "@/components/Icons";
 import { toast } from "@/components/Toast";
 import { loadNextPage } from "@/lib/feed";
+import { isFirstLaunch, track } from "@/lib/stat";
 import { plural } from "@/lib/money";
 import { DAILY_GOAL, useHydrated, useStore, type Decision } from "@/lib/store";
 import type { ExitWay } from "@/components/SwipeCard";
@@ -75,6 +76,8 @@ export default function DeckPage() {
   const [search, setSearch] = useState<{ total: number } | null>(null);
   /** По какому запросу уже предупреждали, что точного совпадения нет. */
   const looseWarned = useRef<string | null>(null);
+  /** По какому запросу уже записали итог поиска в статистику. */
+  const searchTracked = useRef<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [facets, setFacets] = useState<Facets>({ categories: [], groups: [], tags: [], maxPrice: 0, currency: "RUB" });
   const [burst, setBurst] = useState<{ id: number; kind: Decision } | null>(null);
@@ -120,6 +123,21 @@ export default function DeckPage() {
       .catch(() => undefined);
   }, [hydrated, liked, wishlist, cart, applyPrices]);
 
+  /*
+   * Открытие приложения. Читаем «первый ли запуск» до первого же события:
+   * идентификатор устройства заводится при отправке, и после неё запуск уже
+   * не первый.
+   */
+  useEffect(() => {
+    const first = isFirstLaunch();
+    const standalone =
+      typeof window !== "undefined" && window.matchMedia
+        ? window.matchMedia("(display-mode: standalone)").matches
+        : false;
+    const { onboarded: seen, tasted: quizzed, stats: st } = useStore.getState();
+    track("open", { first, standalone, onboarded: seen, tasted: quizzed, swipes: st.swipes });
+  }, []);
+
   useEffect(() => {
     fetch("/api/health")
       .then((r) => r.json())
@@ -145,6 +163,18 @@ export default function DeckPage() {
       window.setTimeout(() => setExitDir("reset"), 420);
       const product = decide(d);
       if (!product) return;
+      // Глубина — это и есть проверка «учится ли лента»: доля «хочу» на
+      // первых двадцати карточках против сотой.
+      track("swipe", {
+        d,
+        n: useStore.getState().stats.swipes,
+        category: product.category,
+        group: product.group,
+        why: product.why,
+        // Меток у карточки до восьми; в журнал идут первые четыре — этого
+        // хватает, чтобы увидеть, какие признаки собирают «хочу».
+        tags: (product.tags ?? []).slice(0, 4),
+      });
       if (d === "like") {
         haptic(12);
         setBurst({ id: Date.now(), kind: d });
@@ -157,6 +187,42 @@ export default function DeckPage() {
       }
     },
     [decide],
+  );
+
+  const onOnboarded = useCallback(() => {
+    track("onboard", { done: true });
+    finishOnboarding();
+  }, [finishOnboarding]);
+
+  /** Итог теста вкусов: что выбрали и выбрали ли вообще. */
+  const onQuizDone = useCallback(
+    (picked: string[], budget?: number, seeded?: Record<string, number>) => {
+      const chosen = Object.entries(seeded ?? {})
+        .filter(([, v]) => v > 0)
+        .map(([tag]) => tag);
+      track("quiz", {
+        picked: picked.length,
+        categories: picked.slice(0, 12),
+        budget: budget ?? 0,
+        tags: chosen,
+        skipped: picked.length === 0 && !chosen.length,
+      });
+      finishTaste(picked, budget, seeded);
+    },
+    [finishTaste],
+  );
+
+  const onUndo = useCallback(() => {
+    track("undo", { n: useStore.getState().stats.swipes });
+    undo();
+  }, [undo]);
+
+  const onReason = useCallback(
+    (reason: Parameters<typeof answerReason>[0]) => {
+      if (reason) track("reason", { reason });
+      answerReason(reason);
+    },
+    [answerReason],
   );
 
   useEffect(() => {
@@ -172,7 +238,7 @@ export default function DeckPage() {
       if (e.key === "ArrowRight") onDecide("like");
       else if (e.key === "ArrowLeft") onDecide("dislike");
       else if (e.key === "ArrowUp") onDecide("super");
-      else if (e.key === "Backspace") undo();
+      else if (e.key === "Backspace") onUndo();
       else if (e.key === " " || e.key === "Enter") {
         e.preventDefault();
         const top = deck[index];
@@ -181,7 +247,7 @@ export default function DeckPage() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onDecide, undo, sheet, filtersOpen, onboarded, tasted, pendingReason, deck, index]);
+  }, [onDecide, onUndo, sheet, filtersOpen, onboarded, tasted, pendingReason, deck, index]);
 
   /** Бесконечная лента: запас карточек пополняется заранее. */
   useEffect(() => {
@@ -190,8 +256,24 @@ export default function DeckPage() {
     if (loadingRef.current) return;
     loadingRef.current = true;
     setLoading(true);
+    const startedAt = Date.now();
     loadNextPage()
       .then((res) => {
+        /*
+         * Долгое ожидание записываем отдельно — и только долгое. Обычная
+         * подгрузка укладывается в доли секунды и журнала не стоит; а вот
+         * «крутится подбор» — ровно та жалоба, ради которой эта метрика и
+         * заведена.
+         */
+        const ms = Date.now() - startedAt;
+        if (ms > 1500 || (res.tries ?? 1) > 1 || !res.ok) {
+          track("wait", { ms, tries: res.tries ?? 1, ok: res.ok, search: !!query });
+        }
+        // Итог поиска — один раз на запрос, а не на каждую его страницу.
+        if (query && searchTracked.current !== query) {
+          searchTracked.current = query;
+          track("search", { q: query.slice(0, 64), found: res.total ?? 0, loose: !!res.loose, noMore: !!res.noMore });
+        }
         if (!res.ok) {
           setFeedError(res.error ?? "Источник не ответил");
           return;
@@ -242,6 +324,7 @@ export default function DeckPage() {
      */
     const inside = g ? (facets.groups.find((x) => x.title === g)?.categories ?? []) : [];
     const categories = (filters.categories ?? []).filter((c) => inside.includes(c));
+    track("filter", { what: "group", group: g ?? "", from: "bar" });
     setFilters({ ...filters, group: g ?? undefined, categories });
     setFeedError(null);
     setSearch(null);
@@ -249,6 +332,7 @@ export default function DeckPage() {
 
   const toggleCategory = (c: string) => {
     const list = filters.categories ?? [];
+    track("filter", { what: "category", category: c, on: !list.includes(c), group: group ?? "", from: "bar" });
     setFilters({ ...filters, categories: list.includes(c) ? list.filter((x) => x !== c) : [...list, c] });
     setFeedError(null);
     setSearch(null);
@@ -256,6 +340,14 @@ export default function DeckPage() {
 
   /** Поиск и фильтры применяются вместе: обе правки пересобирают ленту разом. */
   const applyFilters = (f: typeof filters, q: string) => {
+    track("filter", {
+      what: "sheet",
+      group: f.group ?? "",
+      categories: f.categories ?? [],
+      maxPrice: f.maxPrice,
+      discount: !!f.onlyDiscount,
+      query: !!q,
+    });
     useStore.setState({ query: q });
     setFilters(f);
     setFeedError(null);
@@ -276,9 +368,9 @@ export default function DeckPage() {
   return (
     <div className="flex flex-1 flex-col">
       <AnimatePresence>
-        {!onboarded && <Onboarding onDone={finishOnboarding} />}
+        {!onboarded && <Onboarding onDone={onOnboarded} />}
         {onboarded && !tasted && facets.categories.length > 0 && (
-          <TasteQuiz categories={facets.categories} tags={facets.tags} onDone={finishTaste} />
+          <TasteQuiz categories={facets.categories} tags={facets.tags} onDone={onQuizDone} />
         )}
       </AnimatePresence>
 
@@ -310,7 +402,7 @@ export default function DeckPage() {
                   showHint={i === 0 && stats.swipes < HINT_SWIPES}
                   onDecide={onDecide}
                   onOpen={() => setSheet(product)}
-                  onUndo={undo}
+                  onUndo={onUndo}
                   canUndo={historyLen > 0}
                 />
               ))}
@@ -366,7 +458,7 @@ export default function DeckPage() {
 
       <ProductSheet product={sheet} onClose={() => setSheet(null)} />
 
-      <RejectReasonSheet product={pendingReason} onAnswer={answerReason} />
+      <RejectReasonSheet product={pendingReason} onAnswer={onReason} />
 
       <FilterSheet
         open={filtersOpen}

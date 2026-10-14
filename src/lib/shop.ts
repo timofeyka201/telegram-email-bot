@@ -8,13 +8,18 @@ import type { Product } from "./types";
  * считается, сколько людей ушло покупать. Для всего остального — обычный адрес
  * товара.
  */
-export function shopUrl(product: Pick<Product, "id" | "url" | "source">): string {
-  return product.source === "ae" ? `/api/go/${encodeURIComponent(product.id)}` : product.url;
+/** Откуда человек ушёл в магазин: это считается в статистике переходов. */
+export type ShopFrom = "deck" | "likes" | "cart" | "wishlist" | "item" | "gift";
+
+export function shopUrl(product: Pick<Product, "id" | "url" | "source">, from?: ShopFrom): string {
+  if (product.source !== "ae") return product.url;
+  const where = from ? `?from=${from}` : "";
+  return `/api/go/${encodeURIComponent(product.id)}${where}`;
 }
 
 /** То же, но пригодное для буфера обмена и писем: с адресом сайта. */
-export function shopUrlAbsolute(product: Pick<Product, "id" | "url" | "source">): string {
-  const path = shopUrl(product);
+export function shopUrlAbsolute(product: Pick<Product, "id" | "url" | "source">, from?: ShopFrom): string {
+  const path = shopUrl(product, from);
   if (!path.startsWith("/")) return path;
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   return `${origin}${path}`;

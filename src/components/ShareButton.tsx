@@ -3,6 +3,7 @@
 import { IconShare } from "./Icons";
 import { toast } from "./Toast";
 import { cardUrlAbsolute } from "@/lib/shop";
+import { track } from "@/lib/stat";
 import type { Product } from "@/lib/types";
 
 /**
@@ -20,6 +21,7 @@ export default function ShareButton({ product, className = "" }: { product: Prod
   const share = async () => {
     const url = cardUrlAbsolute(product);
     const title = product.title.slice(0, 120);
+    track("share", { kind: "product", category: product.category, group: product.group });
 
     if (typeof navigator !== "undefined" && navigator.share) {
       try {

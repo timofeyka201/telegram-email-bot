@@ -10,6 +10,7 @@ import { compact, formatNative, formatRub, needsConversion, plural } from "@/lib
 import { currentRates } from "@/lib/rates";
 import { shopUrl } from "@/lib/shop";
 import type { Product } from "@/lib/types";
+import TrackView from "@/components/TrackView";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -130,6 +131,7 @@ export default async function ProductPage({ params }: Params) {
 
   return (
     <Shell product={product}>
+      <TrackView kind="item" />
       <article className="soft-shadow overflow-hidden rounded-[var(--radius-card)] bg-[var(--color-surface)]">
         <div className="relative aspect-square w-full bg-[var(--color-surface-2)]">
           {/* Обычный img, а не наш компонент: страницу собирает сервер, и
@@ -188,7 +190,7 @@ export default async function ProductPage({ params }: Params) {
 
       <div className="mt-3 flex flex-col gap-2">
         <a
-          href={shopUrl(product)}
+          href={shopUrl(product, "item")}
           target="_blank"
           rel="noreferrer noopener nofollow sponsored"
           className="brand-gradient flex min-h-[54px] items-center justify-center gap-2 rounded-full text-[16px] font-extrabold"

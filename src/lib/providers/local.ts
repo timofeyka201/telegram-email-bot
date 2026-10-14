@@ -215,7 +215,9 @@ function pick(found: Product[], hint: TasteHint, rnd: () => number): Product[] {
     .sort((a, b) => b.s - a.s);
 
   const liked = Math.min(scored.length, Math.max(1, Math.round(PAGE * TASTE_SHARE)));
-  const out = scored.slice(0, liked).map((x) => x.p);
+  // Помечаем, кто сюда попал по вкусу, а кто разведкой: по этой пометке
+  // статистика потом считает, окупается ли разведка.
+  const out: Product[] = scored.slice(0, liked).map((x) => ({ ...x.p, why: "taste" as const }));
 
   /*
    * Разведка — это «покажи что-нибудь ещё», и порядок предпочтений тут
@@ -242,7 +244,7 @@ function pick(found: Product[], hint: TasteHint, rnd: () => number): Product[] {
     while (out.length < PAGE && bag.length) {
       const [p] = bag.splice(Math.floor(rnd() * bag.length), 1);
       taken.add(p.id);
-      out.push(p);
+      out.push({ ...p, why: "explore" });
     }
     if (out.length >= PAGE) break;
   }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProvider, defaultProvider, PROVIDERS } from "@/lib/providers";
 import type { TasteHint } from "@/lib/taste";
+import { logEvent } from "@/lib/stats/events";
 import type { FeedPage } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -99,6 +100,15 @@ export async function POST(req: NextRequest) {
         problems.push(`${provider.label}: пусто по запросу «${query || "витрина"}»`);
         continue;
       }
+      // Сколько сервер думал над страницей: отсюда берутся p50/p95 и ответ на
+      // вопрос «почему долго крутится подбор».
+      void logEvent("feed", {
+        ms: Date.now() - startedAt,
+        n: page.products.length,
+        search: !!query,
+        filtered: !!(body.filters && Object.keys(body.filters).length),
+        provider: provider.id,
+      });
       const result: FeedPage = {
         products: page.products,
         cursor: page.cursor,
@@ -127,6 +137,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result);
   }
 
+  void logEvent("feed", { ms: Date.now() - startedAt, n: 0, error: true, search: !!query });
   return NextResponse.json(
     { error: "Ни один источник не ответил", problems },
     { status: 502 },

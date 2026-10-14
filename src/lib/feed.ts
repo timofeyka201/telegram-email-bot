@@ -18,6 +18,8 @@ export type FeedResult = {
   total?: number;
   /** нашлось только по части слов запроса */
   loose?: boolean;
+  /** сколько страниц пришлось запросить, чтобы колода выросла */
+  tries?: number;
 };
 
 let inFlight: Promise<FeedResult> | null = null;
@@ -66,7 +68,7 @@ export function loadNextPage(): Promise<FeedResult> {
 
         const before = useStore.getState().deck.length;
         appendPage(data.products, data.cursor, data.provider, data.providerLabel);
-        last = { ok: true, total: data.total, loose: data.loose };
+        last = { ok: true, total: data.total, loose: data.loose, tries: tries + 1 };
         // Страница целиком из уже виденного — колода не выросла, идём дальше.
         if (useStore.getState().deck.length > before) return last;
       }
